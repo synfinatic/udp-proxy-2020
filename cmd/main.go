@@ -10,7 +10,7 @@ import (
 	"net"
 	"os"
 	"os/user"
-	"strings"
+	"sync"
 	"time"
 )
 
@@ -21,27 +21,13 @@ type Listen struct {
 	promisc bool
 	handle  *pcap.Handle
 	raw     *ipv4.RawConn
+	timeout time.Duration
+	pkts    chan []byte
 }
 
 var Timeout time.Duration
 var Listeners []Listen
 var Interfaces = map[string]pcap.Interface{}
-
-func getConfiguredInterfaces() {
-	if len(Interfaces) > 0 {
-		return
-	}
-	ifs, err := pcap.FindAllDevs()
-	if err != nil {
-		log.Fatal(err)
-	}
-	for _, i := range ifs {
-		if len(i.Addresses) == 0 {
-			continue
-		}
-		Interfaces[i.Name] = i
-	}
-}
 
 func initalizeInterface(l Listen) {
 	// find our interface via libpcap
@@ -56,7 +42,7 @@ func initalizeInterface(l Listen) {
 		log.Fatalf("%s: %s", l.iface, err)
 	}
 	defer inactive.CleanUp()
-	if err = inactive.SetTimeout(Timeout); err != nil {
+	if err = inactive.SetTimeout(l.timeout); err != nil {
 		log.Fatalf("%s: %s", l.iface, err)
 	} else if err = inactive.SetPromisc(l.promisc); err != nil {
 		log.Fatalf("%s: %s", l.iface, err)
@@ -112,23 +98,13 @@ func initalizeInterface(l Listen) {
 	log.Debugf("Opened raw socket on %s: %s", l.iface, p.LocalAddr().String())
 }
 
-func listInterfaces() {
-	getConfiguredInterfaces()
-	for k, v := range Interfaces {
-		fmt.Printf("Interface: %s\n", k)
-		for _, a := range v.Addresses {
-			ones, _ := a.Netmask.Size()
-			if a.Broadaddr != nil {
-				fmt.Printf("\t- IP: %s/%d  Broadaddr: %s\n",
-					a.IP.String(), ones, a.Broadaddr.String())
-			} else if a.P2P != nil {
-				fmt.Printf("\t- IP: %s/%d  PointToPoint: %s\n",
-					a.IP.String(), ones, a.P2P.String())
-			} else {
-				fmt.Printf("\t- IP: %s/%d\n", a.IP.String(), ones)
-			}
-		}
-		fmt.Printf("\n")
+// Goroutine to watch interfaces
+func watch_interface(listen Listen, listeners []Listen, wg *sync.WaitGroup) {
+	// listen on our pcap handler ...
+
+	// now send UDP packet out the other UDP sockets
+	for _, other := range listeners {
+		log.Debug(other)
 	}
 }
 
@@ -140,15 +116,17 @@ func main() {
 	var debug bool
 	var ilist bool
 
+	// option parsing
 	flag.StringArrayVar(&listen, "listen", []string{}, "zero or more non-promisc interfaces")
 	flag.StringArrayVar(&promisc, "promisc", []string{}, "zero or more promiscuous interfaces")
-	flag.Int32SliceVar(&ports, "port", []int32{}, "one or UDP ports to process")
+	flag.Int32SliceVar(&ports, "port", []int32{}, "one or more UDP ports to process")
 	flag.Int64Var(&timeout, "timeout", 250, "timeout in ms")
 	flag.BoolVar(&debug, "debug", false, "Enable debugging")
-	flag.BoolVar(&ilist, "list-interfaces", false, "List interfaces and exit")
+	flag.BoolVar(&ilist, "list-interfaces", false, "List available interfaces and exit")
 
 	flag.Parse()
 
+	// turn on debugging?
 	if debug == true {
 		log.SetLevel(log.DebugLevel)
 	} else {
@@ -161,40 +139,23 @@ func main() {
 	}
 
 	// make sure we're root
-	u, err := user.Current()
-	if err != nil {
+	if u, err := user.Current(); err != nil {
 		log.Fatal(err)
-	}
-	if u.Uid != "0" {
+	} else if u.Uid != "0" {
 		log.Fatal("need to run as root in order for raw sockets to work")
 	}
 
-	d := fmt.Sprintf("%dms", timeout)
-	Timeout, err := time.ParseDuration(d)
-	if err != nil {
-		log.Fatal(err)
-	}
-
+	// Neeed at least two interfaces
 	total := len(promisc) + len(listen)
 	if total < 2 {
 		log.Fatal("Please specify --promisc and --listen at least twice in total")
 	}
 
-	if len(ports) < 1 {
-		log.Fatal("--port must be specified one or more times")
-	}
+	// handle our timeout & bpf filter for ports
+	to := parseTimeout(timeout)
+	bpf_filter := buildBPFFilter(ports)
 
-	var bpf_filters = []string{}
-	for _, p := range ports {
-		bpf_filters = append(bpf_filters, fmt.Sprintf("udp port %d", p))
-	}
-	var bpf_filter string
-	if len(ports) > 1 {
-		bpf_filter = strings.Join(bpf_filters, " or ")
-	} else {
-		bpf_filter = bpf_filters[0]
-	}
-
+	// process our promisc and listen interfaces
 	var interfaces = []string{}
 	for _, iface := range listen {
 		if stringInSlice(iface, interfaces) {
@@ -205,6 +166,7 @@ func main() {
 			iface:   iface,
 			filter:  bpf_filter,
 			ports:   ports,
+			timeout: to,
 			promisc: false,
 			handle:  nil,
 			raw:     nil,
@@ -220,6 +182,7 @@ func main() {
 			iface:   iface,
 			filter:  bpf_filter,
 			ports:   ports,
+			timeout: to,
 			promisc: false,
 			handle:  nil,
 			raw:     nil,
@@ -227,9 +190,18 @@ func main() {
 		Listeners = append(Listeners, new)
 	}
 
+	// init each listener
 	for _, l := range Listeners {
 		initalizeInterface(l)
 		defer l.handle.Close()
 	}
-	fmt.Printf("%v\n", Timeout)
+
+	// start handling packets
+	var wg sync.WaitGroup
+	log.Debug("Initialization complete!")
+	for _, l := range Listeners {
+		wg.Add(1)
+		go watch_interface(l, Listeners, &wg)
+	}
+	wg.Wait()
 }
