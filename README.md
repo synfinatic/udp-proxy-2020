@@ -18,7 +18,7 @@ But I also really like these messages forwarded over my OpenVPN connections
 which utilize the `tun` driver which is a point-to-point interface and 
 _explicity_ does not support broadcasts.  This didn't work well with 
 udp-proxy-relay-redux because Roon is poorly behaved and still tries sending
-broadcasts which are then dropped on the floor.
+"broadcasts" to the .255 address which are then dropped on the floor.
 
 ## So what does this do?
 
@@ -26,7 +26,7 @@ Instead of using a normal UDP socket to listen for broadcast messages, udp-proxy
 uses [libpcap](https://github.com/the-tcpdump-group/libpcap) to "sniff" the UDP 
 broadcast messages.  This means it can be a lot more flexible about what packets
 it "sees" so it can then forward them via a normal UDP socket.  If this makes
-you go "ew", well, welcome to 2020.
+you go "ew", well, [welcome to 2020](https://google.com/search?q=why+is+2020+the+worst).
 
 ## The good news...
 
