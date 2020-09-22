@@ -17,14 +17,17 @@ func main() {
 	var ilist bool
 
 	// option parsing
-	flag.StringArrayVar(&listen, "listen", []string{}, "zero or more non-promisc interface@dstip")
-	flag.StringArrayVar(&promisc, "promisc", []string{}, "zero or more promiscuous interface@dstip")
+	flag.StringSliceVar(&listen, "listen", []string{}, "zero or more non-promisc interface@dstip")
+	flag.StringSliceVar(&promisc, "promisc", []string{}, "zero or more promiscuous interface@dstip")
 	flag.Int32SliceVar(&ports, "port", []int32{}, "one or more UDP ports to process")
 	flag.Int64Var(&timeout, "timeout", 250, "timeout in ms")
 	flag.BoolVar(&debug, "debug", false, "Enable debugging")
 	flag.BoolVar(&ilist, "list-interfaces", false, "List available interfaces and exit")
 
 	flag.Parse()
+
+	log.SetReportCaller(true)
+	///	log.DisableLevelTruncation(true)
 
 	// turn on debugging?
 	if debug == true {
@@ -63,18 +66,18 @@ func main() {
 	}
 
 	// init each listener
-	for _, l := range listeners {
-		initalizeInterface(l)
-		defer l.handle.Close()
+	for i := range listeners {
+		initalizeInterface(&listeners[i])
+		defer listeners[i].handle.Close()
 	}
 
 	// start handling packets
 	var wg sync.WaitGroup
 	spf := SendPktFeed{}
 	log.Debug("Initialization complete!")
-	for _, l := range listeners {
+	for i := range listeners {
 		wg.Add(1)
-		go l.handlePackets(&spf, &wg)
+		go listeners[i].handlePackets(&spf, &wg)
 	}
 	wg.Wait()
 }

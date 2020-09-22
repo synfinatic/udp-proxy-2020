@@ -32,7 +32,7 @@ func processListener(interfaces *[]string, lp []string, promisc bool, bpf_filter
 	for _, i := range lp {
 		s := strings.Split(i, "@")
 		if len(s) != 2 {
-			log.Fatalf("%s is invalid <interface>@<ipaddr>")
+			log.Fatalf("%s is invalid.  Expected: <interface>@<ipaddr>", i)
 		}
 		iface := s[0]
 		ipaddr := s[1]

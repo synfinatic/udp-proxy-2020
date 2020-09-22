@@ -11,7 +11,7 @@ import (
 // var Timeout time.Duration
 var Interfaces = map[string]pcap.Interface{}
 
-func initalizeInterface(l Listen) {
+func initalizeInterface(l *Listen) {
 	// find our interface via libpcap
 	getConfiguredInterfaces()
 	if len(Interfaces[l.iface].Addresses) == 0 {
