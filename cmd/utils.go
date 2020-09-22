@@ -18,6 +18,16 @@ func stringInSlice(a string, list []string) bool {
 	return false
 }
 
+// Check to see if the string prefix is in the slice
+func stringPrefixInSlice(a string, list []string) bool {
+	for _, b := range list {
+		if strings.HasPrefix(b, a) {
+			return true
+		}
+	}
+	return false
+}
+
 // Uses libpcap to get a list of configured interfaces
 // and populate the Interfaces.
 func getConfiguredInterfaces() {

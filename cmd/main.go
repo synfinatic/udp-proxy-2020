@@ -2,7 +2,8 @@ package main
 
 import (
 	"fmt"
-	//	"github.com/google/gopacket"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	log "github.com/sirupsen/logrus"
 	flag "github.com/spf13/pflag"
@@ -10,19 +11,110 @@ import (
 	"net"
 	"os"
 	"os/user"
+	"strings"
 	"sync"
 	"time"
 )
 
+// Struct containing everything for an interface
 type Listen struct {
-	iface   string
-	filter  string
-	ports   []int32
-	promisc bool
+	iface   string  // interface to use
+	filter  string  // bpf filter string to listen on
+	ports   []int32 // port(s) we listen for packets
+	ipaddr  string  // dstip we send packets to
+	promisc bool    // do we enable promisc on this interface?
 	handle  *pcap.Handle
 	raw     *ipv4.RawConn
 	timeout time.Duration
-	pkts    chan []byte
+	sendpkt chan Send // channel used to recieve packets we need to send
+}
+
+type Send struct {
+	packet gopacket.Packet // packet data
+	srcif  string          // interface it came in on
+}
+
+type SendPktFeed struct {
+	lock    sync.Mutex  // lock
+	senders []chan Send // list of channels to send packets on
+}
+
+// Function to send a packet out all the other interfaces other than srcif
+func (s *SendPktFeed) Send(p gopacket.Packet, srcif string) {
+	s.lock.Lock()
+	for _, send := range s.senders {
+		send <- Send{packet: p, srcif: srcif}
+	}
+	s.lock.Unlock()
+}
+
+// Register a channel to recieve packet data we want to send
+func (s *SendPktFeed) RegisterSender(send chan Send) {
+	s.lock.Lock()
+	s.senders = append(s.senders, send)
+	s.lock.Unlock()
+}
+
+// Does the heavy lifting of editing & sending the packet onwards
+func (l *Listen) sendPacket(sndpkt Send) {
+	h := ipv4.Header{
+		Version:  4,
+		Len:      4,
+		TOS:      4,
+		TotalLen: 4,
+		ID:       0,
+		FragOff:  0,
+		TTL:      3,
+		Protocol: 17,
+		Checksum: 0,
+		Src:      net.IP{},
+		Dst:      net.IP{},
+		Options:  []byte{},
+	}
+
+	// Need to tell golang what fields we want to control & the outbound interface
+	err := l.raw.SetControlMessage(ipv4.FlagSrc|ipv4.FlagDst|ipv4.FlagInterface, true)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var pktdata []byte
+	var cm ipv4.ControlMessage
+	if err := l.raw.WriteTo(&h, pktdata, &cm); err != nil {
+		log.Errorf("Unable to send packet on %s: %s", l.iface, err)
+	}
+
+}
+
+func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
+	s.RegisterSender(l.sendpkt)
+	packetSource := gopacket.NewPacketSource(l.handle, l.handle.LinkType())
+	packets := packetSource.Packets()
+	d, _ := time.ParseDuration("5s")
+	ticker := time.Tick(d)
+	for {
+		select {
+		case s := <-l.sendpkt:
+			if l.iface == s.srcif {
+				continue // don't send packets out the same interface them came in on
+			}
+			l.sendPacket(s)
+			// send this packet out this interface
+			// xportLayer := s.packet.TransportLayer()
+			// appLayer := s.packet.ApplicationLayer()
+		case packet := <-packets:
+			// have a packet arriving on our interface
+			if packet.NetworkLayer() == nil || packet.TransportLayer() == nil || packet.TransportLayer().LayerType() != layers.LayerTypeUDP {
+				log.Warnf("%s: Unable packet", l.iface)
+				continue
+			} else if errx := packet.ErrorLayer(); errx != nil {
+				log.Errorf("%s: Unable to decode: %s", l.iface, errx.Error())
+			}
+			s.Send(packet, l.iface)
+		case <-ticker:
+			log.Debugf("handlePackets(%s) ticker", l.iface)
+		}
+	}
 }
 
 var Timeout time.Duration
@@ -42,11 +134,20 @@ func initalizeInterface(l Listen) {
 		log.Fatalf("%s: %s", l.iface, err)
 	}
 	defer inactive.CleanUp()
-	if err = inactive.SetTimeout(l.timeout); err != nil {
+
+	// set our timeout
+	err = inactive.SetTimeout(l.timeout)
+	if err != nil {
 		log.Fatalf("%s: %s", l.iface, err)
-	} else if err = inactive.SetPromisc(l.promisc); err != nil {
+	}
+	// Promiscuous mode on/off
+	err = inactive.SetPromisc(l.promisc)
+	if err != nil {
 		log.Fatalf("%s: %s", l.iface, err)
-	} else if err = inactive.SetSnapLen(9000); err != nil {
+	}
+	// Get the entire packet
+	err = inactive.SetSnapLen(9000)
+	if err != nil {
 		log.Fatalf("%s: %s", l.iface, err)
 	}
 
@@ -56,7 +157,14 @@ func initalizeInterface(l Listen) {
 	}
 
 	// set our BPF filter
-	if err = l.handle.SetBPFFilter(l.filter); err != nil {
+	err = l.handle.SetBPFFilter(l.filter)
+	if err != nil {
+		log.Fatalf("%s: %s", l.iface, err)
+	}
+
+	// just inbound packets
+	err = l.handle.SetDirection(pcap.DirectionIn)
+	if err != nil {
 		log.Fatalf("%s: %s", l.iface, err)
 	}
 
@@ -98,14 +206,36 @@ func initalizeInterface(l Listen) {
 	log.Debugf("Opened raw socket on %s: %s", l.iface, p.LocalAddr().String())
 }
 
-// Goroutine to watch interfaces
-func watch_interface(listen Listen, listeners []Listen, wg *sync.WaitGroup) {
-	// listen on our pcap handler ...
+// takes the list of listen or promisc and returns a list of Listen
+// which then can be initialized
+func processListener(interfaces *[]string, lp []string, promisc bool, bpf_filter string, ports []int32, to time.Duration) []Listen {
+	var ret = []Listen{}
+	for _, i := range lp {
+		s := strings.Split(i, "@")
+		if len(s) != 2 {
+			log.Fatalf("%s is invalid <interface>@<ipaddr>")
+		}
+		iface := s[0]
+		ipaddr := s[1]
 
-	// now send UDP packet out the other UDP sockets
-	for _, other := range listeners {
-		log.Debug(other)
+		iface_prefix := iface + "@"
+		if stringPrefixInSlice(iface_prefix, *interfaces) {
+			log.Fatalf("Can't specify the same interface (%s) multiple times", iface)
+		}
+		*interfaces = append(*interfaces, iface)
+		new := Listen{
+			iface:   iface,
+			filter:  bpf_filter,
+			ports:   ports,
+			ipaddr:  ipaddr,
+			timeout: to,
+			promisc: promisc,
+			handle:  nil,
+			raw:     nil,
+		}
+		ret = append(ret, new)
 	}
+	return ret
 }
 
 func main() {
@@ -117,8 +247,8 @@ func main() {
 	var ilist bool
 
 	// option parsing
-	flag.StringArrayVar(&listen, "listen", []string{}, "zero or more non-promisc interfaces")
-	flag.StringArrayVar(&promisc, "promisc", []string{}, "zero or more promiscuous interfaces")
+	flag.StringArrayVar(&listen, "listen", []string{}, "zero or more non-promisc interface@dstip")
+	flag.StringArrayVar(&promisc, "promisc", []string{}, "zero or more promiscuous interface@dstip")
 	flag.Int32SliceVar(&ports, "port", []int32{}, "one or more UDP ports to process")
 	flag.Int64Var(&timeout, "timeout", 250, "timeout in ms")
 	flag.BoolVar(&debug, "debug", false, "Enable debugging")
@@ -157,37 +287,13 @@ func main() {
 
 	// process our promisc and listen interfaces
 	var interfaces = []string{}
-	for _, iface := range listen {
-		if stringInSlice(iface, interfaces) {
-			log.Fatalf("Can't specify the same interface (%s) multiple times", iface)
-		}
-		interfaces = append(interfaces, iface)
-		new := Listen{
-			iface:   iface,
-			filter:  bpf_filter,
-			ports:   ports,
-			timeout: to,
-			promisc: false,
-			handle:  nil,
-			raw:     nil,
-		}
-		Listeners = append(Listeners, new)
+	a := processListener(&interfaces, listen, false, bpf_filter, ports, to)
+	for _, x := range a {
+		Listeners = append(Listeners, x)
 	}
-	for _, iface := range promisc {
-		if stringInSlice(iface, interfaces) {
-			log.Fatalf("Can't specify the same interface (%s) multiple times", iface)
-		}
-		interfaces = append(interfaces, iface)
-		new := Listen{
-			iface:   iface,
-			filter:  bpf_filter,
-			ports:   ports,
-			timeout: to,
-			promisc: false,
-			handle:  nil,
-			raw:     nil,
-		}
-		Listeners = append(Listeners, new)
+	a = processListener(&interfaces, promisc, true, bpf_filter, ports, to)
+	for _, x := range a {
+		Listeners = append(Listeners, x)
 	}
 
 	// init each listener
@@ -198,10 +304,11 @@ func main() {
 
 	// start handling packets
 	var wg sync.WaitGroup
+	spf := SendPktFeed{}
 	log.Debug("Initialization complete!")
 	for _, l := range Listeners {
 		wg.Add(1)
-		go watch_interface(l, Listeners, &wg)
+		go l.handlePackets(&spf, &wg)
 	}
 	wg.Wait()
 }
