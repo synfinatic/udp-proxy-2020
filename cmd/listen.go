@@ -72,19 +72,71 @@ func initalizeListeners(ifaces []string, promisc bool, bpf_filter string, ports 
 
 // Does the heavy lifting of editing & sending the packet onwards
 func (l *Listen) sendPacket(sndpkt Send) {
+	var eth layers.Ethernet
+	var loop layers.Loopback // BSD NULL/Loopback used for OpenVPN tunnels
+	var ip4 layers.IPv4      // we only support v4
+	var udp layers.UDP
+	var parser *gopacket.DecodingLayerParser
+
+	log.Debugf("processing packet from %s on %s", sndpkt.srcif, l.iface)
+
+	switch sndpkt.linkType {
+	case layers.LinkTypeNull:
+		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeLoopback, &loop, &ip4, &udp)
+	case layers.LinkTypeLoop:
+		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeLoopback, &loop, &ip4, &udp)
+	case layers.LinkTypeEthernet:
+		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &eth, &ip4, &udp)
+	}
+
+	if parser == nil {
+		log.Debugf("Unsupported source linktype: 0x%02x", sndpkt.linkType)
+		return
+	}
+
+	// try decoding our packet
+	decoded := []gopacket.LayerType{}
+	if err := parser.DecodeLayers(sndpkt.packet.Data(), &decoded); err != nil {
+		log.Warnf("Unable to decode packet from %s", sndpkt.srcif)
+		return
+	}
+
+	// packet was decoded
+	found_udp := false
+	found_ipv4 := false
+	for _, layerType := range decoded {
+		switch layerType {
+		case layers.LayerTypeUDP:
+			found_udp = true
+		case layers.LayerTypeIPv4:
+			found_ipv4 = true
+		}
+	}
+	if !found_udp || !found_ipv4 {
+		log.Warnf("Packet from %s did not contain a IPv4/UDP packet", sndpkt.srcif)
+		return
+	}
+
+	var ip_options []byte
+	for _, o := range ip4.Options {
+		s := []byte(o.String())
+		ip_options = append(ip_options, s[:]...)
+	}
+
+	// build a new IPv4 Header
 	h := ipv4.Header{
 		Version:  4,
-		Len:      4,
-		TOS:      4,
-		TotalLen: 4,
-		ID:       0,
-		FragOff:  0,
-		TTL:      3,
+		Len:      int(ip4.IHL),
+		TOS:      int(ip4.TOS),
+		TotalLen: int(ip4.Length),
+		ID:       int(ip4.Id),
+		FragOff:  int(ip4.FragOffset),
+		TTL:      int(ip4.TTL), // copy, don't decrement
 		Protocol: 17,
 		Checksum: 0,
-		Src:      net.IP{},
-		Dst:      net.IP{},
-		Options:  []byte{},
+		Src:      ip4.SrcIP,
+		Dst:      net.ParseIP(l.ipaddr),
+		Options:  ip_options,
 	}
 
 	// Need to tell golang what fields we want to control & the outbound interface
@@ -98,7 +150,6 @@ func (l *Listen) sendPacket(sndpkt Send) {
 	if err := l.raw.WriteTo(&h, pktdata, &cm); err != nil {
 		log.Errorf("Unable to send packet on %s: %s", l.iface, err)
 	}
-
 }
 
 func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
@@ -125,7 +176,7 @@ func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
 			} else if errx := packet.ErrorLayer(); errx != nil {
 				log.Errorf("%s: Unable to decode: %s", l.iface, errx.Error())
 			}
-			s.Send(packet, l.iface)
+			s.Send(packet, l.iface, l.handle.LinkType())
 		case <-ticker:
 			log.Debugf("handlePackets(%s) ticker", l.iface)
 		}

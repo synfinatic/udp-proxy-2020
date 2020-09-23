@@ -27,7 +27,7 @@ func main() {
 	flag.Parse()
 
 	log.SetReportCaller(true)
-	///	log.DisableLevelTruncation(true)
+	// log.DisableLevelTruncation(true)
 
 	// turn on debugging?
 	if debug == true {
