@@ -25,6 +25,13 @@ type Listen struct {
 	sendpkt chan Send // channel used to recieve packets we need to send
 }
 
+// List of LayerTypes we support in sendPacket()
+var validLinkTypes = []layers.LinkType{
+	layers.LinkTypeLoop,
+	layers.LinkTypeEthernet,
+	layers.LinkTypeNull,
+}
+
 // takes the list of listen or promisc and returns a list of Listen
 // which then can be initialized
 func processListener(interfaces *[]string, lp []string, promisc bool, bpf_filter string, ports []int32, to time.Duration) []Listen {
@@ -87,9 +94,7 @@ func (l *Listen) sendPacket(sndpkt Send) {
 		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeLoopback, &loop, &ip4, &udp)
 	case layers.LinkTypeEthernet:
 		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &eth, &ip4, &udp)
-	}
-
-	if parser == nil {
+	default:
 		log.Debugf("Unsupported source linktype: 0x%02x", sndpkt.linkType)
 		return
 	}
@@ -164,10 +169,8 @@ func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
 			if l.iface == s.srcif {
 				continue // don't send packets out the same interface them came in on
 			}
-			l.sendPacket(s)
 			// send this packet out this interface
-			// xportLayer := s.packet.TransportLayer()
-			// appLayer := s.packet.ApplicationLayer()
+			l.sendPacket(s)
 		case packet := <-packets:
 			// have a packet arriving on our interface
 			if packet.NetworkLayer() == nil || packet.TransportLayer() == nil || packet.TransportLayer().LayerType() != layers.LayerTypeUDP {
@@ -181,4 +184,14 @@ func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
 			log.Debugf("handlePackets(%s) ticker", l.iface)
 		}
 	}
+}
+
+// Returns if the provided layertype is valid
+func isValidLayerType(layertype layers.LinkType) bool {
+	for _, b := range validLinkTypes {
+		if b == layertype {
+			return true
+		}
+	}
+	return false
 }

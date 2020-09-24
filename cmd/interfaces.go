@@ -46,7 +46,12 @@ func initalizeInterface(l *Listen) {
 		log.Fatalf("%s: %s", l.iface, err)
 	}
 
+	if !isValidLayerType(l.handle.LinkType()) {
+		log.Fatalf("%s: has an invalid layer type: 0x%02x", l.iface, l.handle.LinkType())
+	}
+
 	// set our BPF filter
+	log.Debugf("%s: applying BPF Filter: %s", l.iface, l.filter)
 	err = l.handle.SetBPFFilter(l.filter)
 	if err != nil {
 		log.Fatalf("%s: %s", l.iface, err)
@@ -60,30 +65,30 @@ func initalizeInterface(l *Listen) {
 
 	log.Debugf("Opened pcap handle on %s", l.iface)
 	var u net.PacketConn = nil
-	var listen string
 
 	// create the raw socket to send UDP messages
-	for _, ip := range Interfaces[l.iface].Addresses {
+	for i, ip := range Interfaces[l.iface].Addresses {
 		// first, figure out out IPv4 address
 		if net.IP.To4(ip.IP) == nil {
+			log.Debugf("\tskipping %d: %s", i, ip.IP.String())
 			continue
 		}
 		log.Debugf("%s: %s", l.iface, ip.IP.String())
 
 		// create our ip:udp socket
-		listen = fmt.Sprintf("%s", ip.IP.String())
+		listen := fmt.Sprintf("%s", ip.IP.String())
 		u, err = net.ListenPacket("ip:udp", listen)
 		if err != nil {
 			log.Fatalf("%s: %s", l.iface, err)
 		}
-		log.Debugf("%s: listening on %s", l.iface, listen)
 		defer u.Close()
+		log.Debugf("%s: listening on %s", l.iface, listen)
 		break
 	}
 
 	// make sure we create our ip:udp socket
 	if u == nil {
-		log.Fatalf("%s: Unable to figure out where to listen for UDP", l.iface)
+		log.Fatalf("%s: No IPv4 address configured. Unable to listen for UDP.", l.iface)
 	}
 
 	// use that ip:udp socket to create a new raw socket
