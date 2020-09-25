@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+const SendBufferSize = 100
+
 // Struct containing everything for an interface
 type Listen struct {
 	iface   string  // interface to use
@@ -58,6 +60,7 @@ func processListener(interfaces *[]string, lp []string, promisc bool, bpf_filter
 			promisc: promisc,
 			handle:  nil,
 			raw:     nil,
+			sendpkt: make(chan Send, SendBufferSize),
 		}
 		ret = append(ret, new)
 	}
@@ -77,32 +80,68 @@ func initalizeListeners(ifaces []string, promisc bool, bpf_filter string, ports 
 	return listeners
 }
 
+// Our goroutine for processing packets
+func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
+	// add ourself as a sender
+	s.RegisterSender(l.sendpkt, l.iface)
+
+	// get packets from libpcap
+	packetSource := gopacket.NewPacketSource(l.handle, l.handle.LinkType())
+	packets := packetSource.Packets()
+
+	// This timer is nice for debugging
+	d, _ := time.ParseDuration("5s")
+	ticker := time.Tick(d)
+
+	// loop forever and ever and ever
+	for {
+		select {
+		case s := <-l.sendpkt: // packet arrived from another interface
+			l.sendPacket(s)
+		case packet := <-packets: // packet arrived on this interfaces
+			// is it legit?
+			if packet.NetworkLayer() == nil || packet.TransportLayer() == nil || packet.TransportLayer().LayerType() != layers.LayerTypeUDP {
+				log.Warnf("%s: Invalid packet", l.iface)
+				continue
+			} else if errx := packet.ErrorLayer(); errx != nil {
+				log.Errorf("%s: Unable to decode: %s", l.iface, errx.Error())
+			}
+
+			log.Debugf("%s: received packet and fowarding onto other interfaces", l.iface)
+			s.Send(packet, l.iface, l.handle.LinkType())
+		case <-ticker: // our timer
+			log.Debugf("handlePackets(%s) ticker", l.iface)
+		}
+	}
+}
+
 // Does the heavy lifting of editing & sending the packet onwards
 func (l *Listen) sendPacket(sndpkt Send) {
 	var eth layers.Ethernet
 	var loop layers.Loopback // BSD NULL/Loopback used for OpenVPN tunnels
 	var ip4 layers.IPv4      // we only support v4
 	var udp layers.UDP
+	var payload gopacket.Payload
 	var parser *gopacket.DecodingLayerParser
 
 	log.Debugf("processing packet from %s on %s", sndpkt.srcif, l.iface)
 
 	switch sndpkt.linkType {
 	case layers.LinkTypeNull:
-		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeLoopback, &loop, &ip4, &udp)
+		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeLoopback, &loop, &ip4, &udp, &payload)
 	case layers.LinkTypeLoop:
-		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeLoopback, &loop, &ip4, &udp)
+		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeLoopback, &loop, &ip4, &udp, &payload)
 	case layers.LinkTypeEthernet:
-		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &eth, &ip4, &udp)
+		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &eth, &ip4, &udp, &payload)
 	default:
-		log.Debugf("Unsupported source linktype: 0x%02x", sndpkt.linkType)
+		log.Fatalf("Unsupported source linktype: 0x%02x", sndpkt.linkType)
 		return
 	}
 
 	// try decoding our packet
 	decoded := []gopacket.LayerType{}
 	if err := parser.DecodeLayers(sndpkt.packet.Data(), &decoded); err != nil {
-		log.Warnf("Unable to decode packet from %s", sndpkt.srcif)
+		log.Warnf("Unable to decode packet from %s: %s", sndpkt.srcif, err)
 		return
 	}
 
@@ -131,18 +170,21 @@ func (l *Listen) sendPacket(sndpkt Send) {
 	// build a new IPv4 Header
 	h := ipv4.Header{
 		Version:  4,
-		Len:      int(ip4.IHL),
+		Len:      int(ip4.IHL) * 4, // expects bytes, not words like the IPv4 header uses
 		TOS:      int(ip4.TOS),
 		TotalLen: int(ip4.Length),
 		ID:       int(ip4.Id),
+		Flags:    0,
 		FragOff:  int(ip4.FragOffset),
 		TTL:      int(ip4.TTL), // copy, don't decrement
 		Protocol: 17,
 		Checksum: 0,
-		Src:      ip4.SrcIP,
-		Dst:      net.ParseIP(l.ipaddr),
+		Src:      ip4.SrcIP.To4(),
+		Dst:      net.ParseIP(l.ipaddr).To4(),
 		Options:  ip_options,
 	}
+
+	log.Debugf("header %v", h)
 
 	// Need to tell golang what fields we want to control & the outbound interface
 	err := l.raw.SetControlMessage(ipv4.FlagSrc|ipv4.FlagDst|ipv4.FlagInterface, true)
@@ -150,39 +192,10 @@ func (l *Listen) sendPacket(sndpkt Send) {
 		log.Fatal(err)
 	}
 
-	var pktdata []byte
+	//	var pktdata []byte
 	var cm ipv4.ControlMessage
-	if err := l.raw.WriteTo(&h, pktdata, &cm); err != nil {
+	if err := l.raw.WriteTo(&h, payload.Payload(), &cm); err != nil {
 		log.Errorf("Unable to send packet on %s: %s", l.iface, err)
-	}
-}
-
-func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
-	s.RegisterSender(l.sendpkt)
-	packetSource := gopacket.NewPacketSource(l.handle, l.handle.LinkType())
-	packets := packetSource.Packets()
-	d, _ := time.ParseDuration("5s")
-	ticker := time.Tick(d)
-	for {
-		select {
-		case s := <-l.sendpkt:
-			if l.iface == s.srcif {
-				continue // don't send packets out the same interface them came in on
-			}
-			// send this packet out this interface
-			l.sendPacket(s)
-		case packet := <-packets:
-			// have a packet arriving on our interface
-			if packet.NetworkLayer() == nil || packet.TransportLayer() == nil || packet.TransportLayer().LayerType() != layers.LayerTypeUDP {
-				log.Warnf("%s: Unable packet", l.iface)
-				continue
-			} else if errx := packet.ErrorLayer(); errx != nil {
-				log.Errorf("%s: Unable to decode: %s", l.iface, errx.Error())
-			}
-			s.Send(packet, l.iface, l.handle.LinkType())
-		case <-ticker:
-			log.Debugf("handlePackets(%s) ticker", l.iface)
-		}
 	}
 }
 

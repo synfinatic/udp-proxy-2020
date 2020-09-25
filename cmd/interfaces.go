@@ -77,11 +77,10 @@ func initalizeInterface(l *Listen) {
 
 		// create our ip:udp socket
 		listen := fmt.Sprintf("%s", ip.IP.String())
-		u, err = net.ListenPacket("ip:udp", listen)
+		u, err = net.ListenPacket("ip:udp", listen) // don't close this
 		if err != nil {
 			log.Fatalf("%s: %s", l.iface, err)
 		}
-		defer u.Close()
 		log.Debugf("%s: listening on %s", l.iface, listen)
 		break
 	}
@@ -92,8 +91,7 @@ func initalizeInterface(l *Listen) {
 	}
 
 	// use that ip:udp socket to create a new raw socket
-	p := ipv4.NewPacketConn(u)
-	defer p.Close()
+	p := ipv4.NewPacketConn(u) // don't close this
 
 	if l.raw, err = ipv4.NewRawConn(u); err != nil {
 		log.Fatalf("%s: %s", l.iface, err)
