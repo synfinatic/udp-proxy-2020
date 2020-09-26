@@ -17,6 +17,7 @@ const SendBufferSize = 100
 // Struct containing everything for an interface
 type Listen struct {
 	iface   string  // interface to use
+	ifidx   int     // interface index of iface
 	filter  string  // bpf filter string to listen on
 	ports   []int32 // port(s) we listen for packets
 	ipaddr  string  // dstip we send packets to
@@ -51,8 +52,16 @@ func processListener(interfaces *[]string, lp []string, promisc bool, bpf_filter
 			log.Fatalf("Can't specify the same interface (%s) multiple times", iface)
 		}
 		*interfaces = append(*interfaces, iface)
+
+		netif, err := net.InterfaceByName(iface)
+		if err != nil {
+			log.Fatalf("Unable to get network index for %s: %s", iface, err)
+		}
+		log.Debugf("%s: ifIndex: %d", iface, netif.Index)
+
 		new := Listen{
 			iface:   iface,
+			ifidx:   netif.Index,
 			filter:  bpf_filter,
 			ports:   ports,
 			ipaddr:  ipaddr,
@@ -187,13 +196,21 @@ func (l *Listen) sendPacket(sndpkt Send) {
 	log.Debugf("header %v", h)
 
 	// Need to tell golang what fields we want to control & the outbound interface
-	err := l.raw.SetControlMessage(ipv4.FlagSrc|ipv4.FlagDst|ipv4.FlagInterface, true)
+	var cmflags ipv4.ControlFlags = 0
+	cmflags = ipv4.FlagSrc | ipv4.FlagInterface
+
+	err := l.raw.SetControlMessage(cmflags, true)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	//	var pktdata []byte
-	var cm ipv4.ControlMessage
+	cm := ipv4.ControlMessage{
+		TTL:     0, // ignored
+		Src:     ip4.SrcIP.To4(),
+		Dst:     nil, // ignored
+		IfIndex: l.ifidx,
+	}
+
 	if err := l.raw.WriteTo(&h, payload.Payload(), &cm); err != nil {
 		log.Errorf("Unable to send packet on %s: %s", l.iface, err)
 	}
