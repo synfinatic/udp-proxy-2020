@@ -12,56 +12,56 @@ var Interfaces = map[string]pcap.Interface{}
 func initalizeInterface(l *Listen) {
 	// find our interface via libpcap
 	getConfiguredInterfaces()
-	if len(Interfaces[l.iface].Addresses) == 0 {
+	if len(Interfaces[l.iname].Addresses) == 0 {
 		log.Fatalf("%s is not configured")
 	}
 
 	// configure libpcap listener
-	inactive, err := pcap.NewInactiveHandle(l.iface)
+	inactive, err := pcap.NewInactiveHandle(l.iname)
 	if err != nil {
-		log.Fatalf("%s: %s", l.iface, err)
+		log.Fatalf("%s: %s", l.iname, err)
 	}
 	defer inactive.CleanUp()
 
 	// set our timeout
 	err = inactive.SetTimeout(l.timeout)
 	if err != nil {
-		log.Fatalf("%s: %s", l.iface, err)
+		log.Fatalf("%s: %s", l.iname, err)
 	}
 	// Promiscuous mode on/off
 	err = inactive.SetPromisc(l.promisc)
 	if err != nil {
-		log.Fatalf("%s: %s", l.iface, err)
+		log.Fatalf("%s: %s", l.iname, err)
 	}
 	// Get the entire packet
 	err = inactive.SetSnapLen(9000)
 	if err != nil {
-		log.Fatalf("%s: %s", l.iface, err)
+		log.Fatalf("%s: %s", l.iname, err)
 	}
 
 	// activate libpcap handle
 	if l.handle, err = inactive.Activate(); err != nil {
-		log.Fatalf("%s: %s", l.iface, err)
+		log.Fatalf("%s: %s", l.iname, err)
 	}
 
 	if !isValidLayerType(l.handle.LinkType()) {
-		log.Fatalf("%s: has an invalid layer type: 0x%02x", l.iface, l.handle.LinkType())
+		log.Fatalf("%s: has an invalid layer type: 0x%02x", l.iname, l.handle.LinkType())
 	}
 
 	// set our BPF filter
-	log.Debugf("%s: applying BPF Filter: %s", l.iface, l.filter)
+	log.Debugf("%s: applying BPF Filter: %s", l.iname, l.filter)
 	err = l.handle.SetBPFFilter(l.filter)
 	if err != nil {
-		log.Fatalf("%s: %s", l.iface, err)
+		log.Fatalf("%s: %s", l.iname, err)
 	}
 
 	// just inbound packets
 	err = l.handle.SetDirection(pcap.DirectionIn)
 	if err != nil {
-		log.Fatalf("%s: %s", l.iface, err)
+		log.Fatalf("%s: %s", l.iname, err)
 	}
 
-	log.Debugf("Opened pcap handle on %s", l.iface)
+	log.Debugf("Opened pcap handle on %s", l.iname)
 }
 
 // Uses libpcap to get a list of configured interfaces
