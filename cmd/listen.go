@@ -171,7 +171,7 @@ func (l *Listen) sendPacket(sndpkt Send) {
 	buffer := gopacket.NewSerializeBuffer()
 	csum_opts := gopacket.SerializeOptions{
 		FixLengths:       false,
-		ComputeChecksums: true,
+		ComputeChecksums: true, // only works for IPv4
 	}
 	opts := gopacket.SerializeOptions{
 		FixLengths:       false,
@@ -183,11 +183,13 @@ func (l *Listen) sendPacket(sndpkt Send) {
 		log.Fatalf("can't serialize payload: %v", payload)
 	}
 
-	// UDP checksums can't be calculated via SerializeOptions :(
+	// UDP checksums can't be calculated via SerializeOptions
+	// because it requires the IP pseudo-header:
+	// https://en.wikipedia.org/wiki/User_Datagram_Protocol#IPv4_pseudo_header
 	new_udp := layers.UDP{
 		SrcPort:  udp.SrcPort,
 		DstPort:  udp.DstPort,
-		Checksum: 0,
+		Checksum: 0, // but 0 is always valid for UDP
 		Length:   uint16(8 + len(payload)),
 	}
 
@@ -195,12 +197,24 @@ func (l *Listen) sendPacket(sndpkt Send) {
 		log.Fatalf("can't serialize UDP header: %v", udp)
 	}
 
-	// update IPv4 header
-	ip4.BaseLayer = layers.BaseLayer{}
-	ip4.DstIP = net.ParseIP(l.ipaddr).To4()
-	ip4.Checksum = 0 // reset to calc checksums
-	if err := ip4.SerializeTo(buffer, csum_opts); err != nil {
-		log.Fatalf("can't serialize IP header: %v", ip4)
+	// IPv4 header
+	new_ip4 := layers.IPv4{
+		Version:    ip4.Version,
+		IHL:        ip4.IHL,
+		TOS:        ip4.TOS,
+		Length:     ip4.Length,
+		Id:         ip4.Id,
+		Flags:      ip4.Flags,
+		FragOffset: ip4.FragOffset,
+		TTL:        ip4.TTL,
+		Protocol:   ip4.Protocol,
+		Checksum:   0, // reset to calc checksums
+		SrcIP:      ip4.SrcIP,
+		DstIP:      net.ParseIP(l.ipaddr).To4(),
+		Options:    ip4.Options,
+	}
+	if err := new_ip4.SerializeTo(buffer, csum_opts); err != nil {
+		log.Fatalf("can't serialize IP header: %v", new_ip4)
 	}
 
 	// Loopback or Ethernet
