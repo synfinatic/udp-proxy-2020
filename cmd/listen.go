@@ -231,7 +231,7 @@ func (l *Listen) sendPacket(sndpkt Send) {
 			BaseLayer:    layers.BaseLayer{},
 			DstMAC:       net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
 			SrcMAC:       l.iface.HardwareAddr,
-			EthernetType: eth.EthernetType,
+			EthernetType: layers.EthernetTypeIPv4,
 		}
 		if err := new_eth.SerializeTo(buffer, opts); err != nil {
 			log.Fatalf("can't serialize Eth header: %v", new_eth)
