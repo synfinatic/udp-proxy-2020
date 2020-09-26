@@ -13,7 +13,7 @@ func initalizeInterface(l *Listen) {
 	// find our interface via libpcap
 	getConfiguredInterfaces()
 	if len(Interfaces[l.iname].Addresses) == 0 {
-		log.Fatalf("%s is not configured")
+		log.Fatalf("%s is not configured", l.iname)
 	}
 
 	// configure libpcap listener

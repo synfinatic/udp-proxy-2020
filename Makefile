@@ -77,3 +77,7 @@ vet:
 .PHONY: prepare
 prepare:
 	mkdir -p $(DIST_DIR)
+
+.PHONY: fmt
+fmt:
+	cd cmd && go fmt *.go
