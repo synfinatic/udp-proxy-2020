@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"github.com/google/gopacket/pcap"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/ipv4"
-	"net"
 )
 
 // var Timeout time.Duration
@@ -64,39 +62,6 @@ func initalizeInterface(l *Listen) {
 	}
 
 	log.Debugf("Opened pcap handle on %s", l.iface)
-	var u net.PacketConn = nil
-
-	// create the raw socket to send UDP messages
-	for i, ip := range Interfaces[l.iface].Addresses {
-		// first, figure out out IPv4 address
-		if net.IP.To4(ip.IP) == nil {
-			log.Debugf("\tskipping %d: %s", i, ip.IP.String())
-			continue
-		}
-		log.Debugf("%s: %s", l.iface, ip.IP.String())
-
-		// create our ip:udp socket
-		listen := fmt.Sprintf("%s", ip.IP.String())
-		u, err = net.ListenPacket("ip:udp", listen) // don't close this
-		if err != nil {
-			log.Fatalf("%s: %s", l.iface, err)
-		}
-		log.Debugf("%s: listening on %s", l.iface, listen)
-		break
-	}
-
-	// make sure we create our ip:udp socket
-	if u == nil {
-		log.Fatalf("%s: No IPv4 address configured. Unable to listen for UDP.", l.iface)
-	}
-
-	// use that ip:udp socket to create a new raw socket
-	p := ipv4.NewPacketConn(u) // don't close this
-
-	if l.raw, err = ipv4.NewRawConn(u); err != nil {
-		log.Fatalf("%s: %s", l.iface, err)
-	}
-	log.Debugf("Opened raw socket on %s: %s", l.iface, p.LocalAddr().String())
 }
 
 // Uses libpcap to get a list of configured interfaces

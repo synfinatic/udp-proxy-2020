@@ -25,7 +25,7 @@ udp-proxy-relay-redux because Roon is poorly behaved and still tries sending
 Instead of using a normal UDP socket to listen for broadcast messages, udp-proxy-2020 
 uses [libpcap](https://github.com/the-tcpdump-group/libpcap) to "sniff" the UDP 
 broadcast messages.  This means it can be a lot more flexible about what packets
-it "sees" so it can then forward them via a normal UDP socket.  If this makes
+it "sees" so it can then sends them via libpcap/packet injection as well.  If this makes
 you go "ew", well, [welcome to 2020](https://google.com/search?q=why+is+2020+the+worst).
 
 ## The good news...

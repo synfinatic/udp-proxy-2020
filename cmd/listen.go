@@ -5,7 +5,6 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/ipv4"
 	"net"
 	"strings"
 	"sync"
@@ -16,14 +15,14 @@ const SendBufferSize = 100
 
 // Struct containing everything for an interface
 type Listen struct {
-	iface   string  // interface to use
-	ifidx   int     // interface index of iface
-	filter  string  // bpf filter string to listen on
-	ports   []int32 // port(s) we listen for packets
-	ipaddr  string  // dstip we send packets to
-	promisc bool    // do we enable promisc on this interface?
+	iface   string           // interface to use
+	ifidx   int              // interface index of iface
+	macaddr net.HardwareAddr // MAC address
+	filter  string           // bpf filter string to listen on
+	ports   []int32          // port(s) we listen for packets
+	ipaddr  string           // dstip we send packets to
+	promisc bool             // do we enable promisc on this interface?
 	handle  *pcap.Handle
-	raw     *ipv4.RawConn
 	timeout time.Duration
 	sendpkt chan Send // channel used to recieve packets we need to send
 }
@@ -62,13 +61,13 @@ func processListener(interfaces *[]string, lp []string, promisc bool, bpf_filter
 		new := Listen{
 			iface:   iface,
 			ifidx:   netif.Index,
+			macaddr: netif.HardwareAddr,
 			filter:  bpf_filter,
 			ports:   ports,
 			ipaddr:  ipaddr,
 			timeout: to,
 			promisc: promisc,
 			handle:  nil,
-			raw:     nil,
 			sendpkt: make(chan Send, SendBufferSize),
 		}
 		ret = append(ret, new)
@@ -127,7 +126,7 @@ func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
 // Does the heavy lifting of editing & sending the packet onwards
 func (l *Listen) sendPacket(sndpkt Send) {
 	var eth layers.Ethernet
-	var loop layers.Loopback // BSD NULL/Loopback used for OpenVPN tunnels
+	var loop layers.Loopback // BSD NULL/Loopback used for OpenVPN tunnels/etc
 	var ip4 layers.IPv4      // we only support v4
 	var udp layers.UDP
 	var payload gopacket.Payload
@@ -170,49 +169,60 @@ func (l *Listen) sendPacket(sndpkt Send) {
 		return
 	}
 
-	var ip_options []byte
-	for _, o := range ip4.Options {
-		s := []byte(o.String())
-		ip_options = append(ip_options, s[:]...)
+	// Rewrite packet
+	new_eth := layers.Ethernet{
+		BaseLayer:    layers.BaseLayer{},
+		DstMAC:       net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		SrcMAC:       l.macaddr,
+		EthernetType: eth.EthernetType,
 	}
 
-	// build a new IPv4 Header
-	h := ipv4.Header{
-		Version:  4,
-		Len:      int(ip4.IHL) * 4, // expects bytes, not words like the IPv4 header uses
-		TOS:      int(ip4.TOS),
-		TotalLen: int(ip4.Length),
-		ID:       int(ip4.Id),
-		Flags:    0,
-		FragOff:  int(ip4.FragOffset),
-		TTL:      int(ip4.TTL), // copy, don't decrement
-		Protocol: 17,
+	log.Debugf("old ethernet: %v", eth)
+	log.Debugf("new ethernet: %v", new_eth)
+
+	log.Debugf("old IPv4: %v", ip4)
+	ip4.BaseLayer = layers.BaseLayer{}
+	ip4.DstIP = net.ParseIP(l.ipaddr).To4()
+	ip4.Checksum = 0 // reset to calc checksum
+	log.Debugf("new IPv4: %v", ip4)
+	new_udp := layers.UDP{
+		SrcPort:  udp.SrcPort,
+		DstPort:  udp.DstPort,
 		Checksum: 0,
-		Src:      ip4.SrcIP.To4(),
-		Dst:      net.ParseIP(l.ipaddr).To4(),
-		Options:  ip_options,
+		Length:   uint16(8 + len(payload)),
 	}
 
-	log.Debugf("header %v", h)
+	buffer := gopacket.NewSerializeBuffer()
+	csum_opts := gopacket.SerializeOptions{
+		FixLengths:       false,
+		ComputeChecksums: true,
+	}
+	opts := gopacket.SerializeOptions{
+		FixLengths:       false,
+		ComputeChecksums: false,
+	}
+	//gopacket.SerializeLayers(buffer, opts, &new_eth, &ip4, &udp, &payload)
+	if err := payload.SerializeTo(buffer, opts); err != nil {
+		log.Fatalf("can't serialize payload: %v", payload)
+	}
+	if err := new_udp.SerializeTo(buffer, opts); err != nil {
+		log.Fatalf("can't serialize UDP header: %v", udp)
+	}
+	if err := ip4.SerializeTo(buffer, csum_opts); err != nil {
+		log.Fatalf("can't serialize IP header: %v", ip4)
+	}
 
-	// Need to tell golang what fields we want to control & the outbound interface
-	var cmflags ipv4.ControlFlags = 0
-	cmflags = ipv4.FlagSrc | ipv4.FlagInterface
+	// need to deal with loopback here somehow
+	if err := new_eth.SerializeTo(buffer, opts); err != nil {
+		log.Fatalf("can't serialize Eth header: %v", new_eth)
+	}
 
-	err := l.raw.SetControlMessage(cmflags, true)
+	outgoingPacket := buffer.Bytes()
+	log.Debugf("%s: packet len: %d: %v", l.iface, len(outgoingPacket), outgoingPacket)
+	err := l.handle.WritePacketData(outgoingPacket)
 	if err != nil {
-		log.Fatal(err)
-	}
-
-	cm := ipv4.ControlMessage{
-		TTL:     0, // ignored
-		Src:     ip4.SrcIP.To4(),
-		Dst:     nil, // ignored
-		IfIndex: l.ifidx,
-	}
-
-	if err := l.raw.WriteTo(&h, payload.Payload(), &cm); err != nil {
-		log.Errorf("Unable to send packet on %s: %s", l.iface, err)
+		log.Warnf("Unable to send %d bytes from %s out %s: %s",
+			len(outgoingPacket), sndpkt.srcif, l.iface, err)
 	}
 }
 
