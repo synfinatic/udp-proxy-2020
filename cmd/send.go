@@ -37,11 +37,11 @@ func (s *SendPktFeed) Send(p gopacket.Packet, srcif string, linkType layers.Link
 }
 
 // Register a channel to recieve packet data we want to send
-func (s *SendPktFeed) RegisterSender(send chan Send, iface string) {
+func (s *SendPktFeed) RegisterSender(send chan Send, iname string) {
 	s.lock.Lock()
 	if s.senders == nil {
 		s.senders = make(map[string]chan Send)
 	}
-	s.senders[iface] = send
+	s.senders[iname] = send
 	s.lock.Unlock()
 }
