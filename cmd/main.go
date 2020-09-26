@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	log "github.com/sirupsen/logrus"
 	flag "github.com/spf13/pflag"
 	"os"
@@ -8,12 +9,15 @@ import (
 	"sync"
 )
 
+const Version = "0.0.1"
+
 func main() {
 	var listen = []string{}
 	var promisc = []string{}
 	var ports = []int32{}
 	var timeout int64
 	var debug bool
+	var version bool
 	var ilist bool
 
 	// option parsing
@@ -23,6 +27,7 @@ func main() {
 	flag.Int64Var(&timeout, "timeout", 250, "timeout in ms")
 	flag.BoolVar(&debug, "debug", false, "Enable debugging")
 	flag.BoolVar(&ilist, "list-interfaces", false, "List available interfaces and exit")
+	flag.BoolVar(&version, "version", false, "Print version and exit")
 
 	flag.Parse()
 
@@ -34,6 +39,11 @@ func main() {
 		log.SetLevel(log.DebugLevel)
 	} else {
 		log.SetLevel(log.WarnLevel)
+	}
+
+	if version == true {
+		fmt.Printf("udp-proxy-2020 Version %s -- Copyright 2020 Aaron Turner\n", Version)
+		os.Exit(0)
 	}
 
 	if ilist == true {
