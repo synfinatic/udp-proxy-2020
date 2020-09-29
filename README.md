@@ -33,3 +33,8 @@ you go "ew", well, [welcome to 2020](https://google.com/search?q=why+is+2020+the
 I'm writing this in GoLang so at least cross compiling onto your random Linux/FreeBSD
 router/firewall is reasonably easy.  No ugly cross-compling C or trying to install
 Python/Ruby and a bunch of libraries.
+
+*Also: HAHAHAHAHAHAHA!  None of that is true!*  Needing to use 
+[libpcap](https://www.tcpdump.org) means I have to cross compile using CGO because
+[gopacket/pcapgo](https://gowalker.org/github.com/google/gopacket/pcapgo) only
+supports Linux for reading & writing to (ethernet?) network interfaces.
