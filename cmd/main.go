@@ -9,6 +9,10 @@ import (
 	"sync"
 )
 
+var Version = "unknown"
+var Buildinfos = "unknown"
+var Hostname = "unknown"
+
 func main() {
 	var listen = []string{}
 	var promisc = []string{}
@@ -41,6 +45,7 @@ func main() {
 
 	if version == true {
 		fmt.Printf("udp-proxy-2020 Version %s -- Copyright 2020 Aaron Turner\n", Version)
+		fmt.Printf("Built at %s on %s\n", Buildinfos, Hostname)
 		os.Exit(0)
 	}
 

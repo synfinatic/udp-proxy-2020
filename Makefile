@@ -1,44 +1,38 @@
 EXTENSION ?=
 DIST_DIR ?= dist/
 GOOS ?= $(shell uname -s | tr "[:upper:]" "[:lower:]")
-ARCH ?= $(shell uname -m)
+GOARCH ?= $(shell uname -m)
 BUILDINFOSDET ?=
 
 DOCKER_REPO        := synfinatic
 PROJECT_NAME       := udp-proxy-2020
-PROJECT_VERSION    := $(shell git describe --tags 2>/dev/null $(git rev-list --tags --max-count=1))
+PROJECT_TAG        := $(shell git describe --tags 2>/dev/null $(git rev-list --tags --max-count=1))
 PROJECT_VERSION    := 0.0.3
 VERSION_PKG        := $(shell echo $(PROJECT_VERSION) | sed 's/^v//g')
-ARCH               := x86_64
 LICENSE            := GPLv3
 URL                := https://github.com/$(DOCKER_REPO)/$(PROJECT_NAME)
 DESCRIPTION        := UDP Proxy 2020: A bad hack for a stupid problem
-BUILDINFOS         := ($(shell date +%FT%T%z)$(BUILDINFOSDET))
-LDFLAGS            := '-X main.version=$(PROJECT_VERSION) -X main.buildinfos=$(BUILDINFOS)'
-OUTPUT_NAME        := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-$(GOOS)-$(ARCH)$(EXTENSION)
-FREEBSD_NAME       := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-$(ARCH)$(EXTENSION)
-PFSENSE_NAME       := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-pfsense-$(ARCH)$(EXTENSION)
+BUILDINFOS         := $(shell date +%FT%T%z)$(BUILDINFOSDET)
+HOSTNAME           := $(shell hostname)
+LDFLAGS            := -X "main.Version=$(PROJECT_VERSION)" -X "main.Buildinfos=$(BUILDINFOS)" -X "main.Hostname=$(HOSTNAME)"
+OUTPUT_NAME        := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-$(GOOS)-$(GOARCH)$(EXTENSION)
+FREEBSD_NAME       := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-$(GOARCH)$(EXTENSION)
+PFSENSE_NAME       := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-pfsense-$(GOARCH)$(EXTENSION)
+MIPS64_NAME        := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-mips64$(EXTENSION)
 
 ALL: udp-proxy-2020
 
 test: test-race vet unittest
 
-cmd/version.go:
-	@echo "package main" >cmd/version.go
-	@echo "" >>cmd/version.go
-	@echo "const Version = \"$(PROJECT_VERSION)\"" >>cmd/version.go
-	@echo "const Description = \"$(DESCRIPTION)\"" >>cmd/version.go
-	@echo "const URL = \"$(URL)\"" >>cmd/version.go
 
 PHONY: run
-run: cmd/version.go
+run:
 	go run cmd/*.go
 
 clean-all: vagrant-destroy clean
 
 clean:
 	rm -f dist/*
-	rm cmd/version.go
 
 clean-go:
 	go clean -i -r -cache -modcache
@@ -46,11 +40,11 @@ clean-go:
 udp-proxy-2020: $(OUTPUT_NAME)
 
 $(OUTPUT_NAME): prepare
-	go build -ldflags $(LDFLAGS) -o $(OUTPUT_NAME) cmd/*.go
+	go build -ldflags='$(LDFLAGS)' -o $(OUTPUT_NAME) cmd/*.go
 
 .PHONY: build-race
 build-race: prepare
-	go build -race -ldflags $(LDFLAGS) -o $(OUTPUT_NAME) cmd/*.go
+	go build -race -ldflags='$(LDFLAGS)' -o $(OUTPUT_NAME) cmd/*.go
 
 debug: prepare
 	dlv debug cmd/*.go
@@ -87,7 +81,7 @@ vet:
 	go vet $(shell go list ./...)
 
 .PHONY: prepare
-prepare: cmd/version.go
+prepare:
 	mkdir -p $(DIST_DIR)
 
 .PHONY: fmt
@@ -112,3 +106,24 @@ $(PFSENSE_NAME): vagrant-scp
 
 vagrant-destroy:
 	vagrant destroy -f
+
+PHONY: mips64-build
+mips64-build: prepare
+	docker build -t $(DOCKER_REPO)/$(PROJECT_NAME)-mips64:latest -f Dockerfile.mips64 .
+	docker run --rm \
+	    --volume $(shell pwd):/build/udp-proxy-2020 \
+	    $(DOCKER_REPO)/$(PROJECT_NAME)-mips64:latest
+
+PHONY: mips64-shell
+mips64-shell: prepare
+	docker run -it --rm \
+	    --volume $(shell pwd):/build/udp-proxy-2020 \
+	    --entrypoint /bin/bash \
+	    $(DOCKER_REPO)/$(PROJECT_NAME)-mips64:latest
+
+mips64-compile: $(MIPS64_NAME)
+$(MIPS64_NAME): prepare
+	LDFLAGS='-l/usr/mips64-linux-gnuabi64/lib/libpcap.a' \
+	    GOOS=linux GOARCH=mips64 CGO_ENABLED=1 CC=mips64-linux-gnuabi64-gcc \
+	    PKG_CONFIG_PATH=/usr/mips64-linux-gnuabi64/lib/pkgconfig \
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(MIPS64_NAME) cmd/*.go
