@@ -6,7 +6,7 @@ Vagrant.configure("2") do |config|
   config.vm.provision "shell",
     inline: "pkg install -y git gmake go libpcap"
   # have to rsync our code over to build
-  config.vm.synced_folder ".", "/home/vagrant/udp-proxy-2020", create: true, disabled: false, id: 'source-code', type: "rsync", rsync__exclude: ".git/"
+  config.vm.synced_folder ".", "/home/vagrant/udp-proxy-2020", create: true, disabled: false, id: 'source-code', type: "rsync"
   config.vm.provider :virtualbox do |vb|
     vb.gui = false
     vb.customize ["modifyvm", :id, "--vram", "16", "--graphicscontroller", "vmsvga"]

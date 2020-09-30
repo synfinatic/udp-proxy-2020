@@ -11,7 +11,8 @@ import (
 
 var Version = "unknown"
 var Buildinfos = "unknown"
-var Hostname = "unknown"
+var Tag = "NO-TAG"
+var CommitID = "unknown"
 
 func main() {
 	var listen = []string{}
@@ -45,7 +46,7 @@ func main() {
 
 	if version == true {
 		fmt.Printf("udp-proxy-2020 Version %s -- Copyright 2020 Aaron Turner\n", Version)
-		fmt.Printf("Built at %s on %s\n", Buildinfos, Hostname)
+		fmt.Printf("%s (%s) built at %s\n", CommitID, Tag, Buildinfos)
 		os.Exit(0)
 	}
 
