@@ -4,7 +4,7 @@ GOARCH ?= $(shell uname -m)
 BUILDINFOSDET ?=
 UDP_PROXY_2020_ARGS ?=
 
-PROJECT_VERSION    := 0.0.3
+PROJECT_VERSION    := 0.0.4
 DOCKER_REPO        := synfinatic
 PROJECT_NAME       := udp-proxy-2020
 PROJECT_TAG        := $(shell git describe --tags 2>/dev/null $(git rev-list --tags --max-count=1))
@@ -79,7 +79,7 @@ fmt: ## Format Go code
 	@go fmt cmd
 
 .PHONY: test-fmt
-test-fmt: fmt
+test-fmt: fmt ## Test to make sure code if formatted correctly
 	@if test `git diff cmd | wc -l` -gt 0; then \
 	    echo "Code changes detected when running 'go fmt':" ; \
 	    git diff -Xfiles ; \
@@ -87,13 +87,14 @@ test-fmt: fmt
 	fi
 
 .PHONY: test-tidy
-test-tidy:
+test-tidy:  ## Test to make sure go.mod is tidy
 	@go mod tidy
 	@if test `git diff go.mod | wc -l` -gt 0; then \
 	    echo "Need to run 'go mod tidy' to clean up go.mod" ; \
 	    exit -1 ; \
 	fi
 
+precheck: test test-fmt test-tidy  ## Run all tests that happen in a PR
 
 ######################################################################
 # Docker targets for testing
