@@ -1,0 +1,10 @@
+FROM ubuntu:20.04
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PROJECT=udp-proxy-2020
+ENV GOPATH=/go
+RUN apt-get update && apt-get install -y golang-1.14-go libpcap0.8 libpcap0.8-dev make git
+RUN mkdir -p /build
+WORKDIR /build
+COPY . /build/$PROJECT/
+WORKDIR /build/$PROJECT 
+ENTRYPOINT PATH=/usr/lib/go-1.14/bin:$PATH make .linux-static
