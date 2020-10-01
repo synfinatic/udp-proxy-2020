@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
-	flag "github.com/spf13/pflag"
 	"os"
 	"os/user"
 	"sync"
+
+	log "github.com/sirupsen/logrus"
+	flag "github.com/spf13/pflag"
 )
 
 var Version = "unknown"
@@ -15,8 +16,7 @@ var Tag = "NO-TAG"
 var CommitID = "unknown"
 
 func main() {
-	var listen = []string{}
-	var promisc = []string{}
+	var interfaces = []string{}
 	var ports = []int32{}
 	var timeout int64
 	var debug bool
@@ -24,8 +24,8 @@ func main() {
 	var ilist bool
 
 	// option parsing
-	flag.StringSliceVar(&listen, "listen", []string{}, "zero or more non-promisc interface@dstip")
-	flag.StringSliceVar(&promisc, "promisc", []string{}, "zero or more promiscuous interface@dstip")
+
+	flag.StringSliceVar(&interfaces, "interface", []string{}, "interfaces to use")
 	flag.Int32SliceVar(&ports, "port", []int32{}, "one or more UDP ports to process")
 	flag.Int64Var(&timeout, "timeout", 250, "timeout in ms")
 	flag.BoolVar(&debug, "debug", false, "Enable debugging")
@@ -63,25 +63,20 @@ func main() {
 	}
 
 	// Neeed at least two interfaces
-	total := len(promisc) + len(listen)
-	if total < 2 {
-		log.Fatal("Please specify --promisc and --listen at least twice in total")
+	if len(interfaces) < 2 {
+		log.Fatal("Please specify --interfaces at least twice")
 	}
 
 	// handle our timeout & bpf filter for ports
 	to := parseTimeout(timeout)
 	bpf_filter := buildBPFFilter(ports)
 
-	// init the listeners which are not promisc
-	listeners := initalizeListeners(listen, false, bpf_filter, ports, to)
-	// do the same for the promisc list which is
-	for _, l := range initalizeListeners(promisc, true, bpf_filter, ports, to) {
-		listeners = append(listeners, l)
-	}
+	// init the listeners
+	listeners := initializeListeners(interfaces, bpf_filter, ports, to)
 
 	// init each listener
 	for i := range listeners {
-		initalizeInterface(&listeners[i])
+		initializeInterface(&listeners[i])
 		defer listeners[i].handle.Close()
 	}
 

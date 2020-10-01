@@ -2,14 +2,15 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/google/gopacket/pcap"
 	log "github.com/sirupsen/logrus"
 )
 
-// var Timeout time.Duration
+// Interfaces is a map between interface name and pcap data structure
 var Interfaces = map[string]pcap.Interface{}
 
-func initalizeInterface(l *Listen) {
+func initializeInterface(l *Listen) {
 	// find our interface via libpcap
 	getConfiguredInterfaces()
 	if len(Interfaces[l.iname].Addresses) == 0 {

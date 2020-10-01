@@ -1,14 +1,15 @@
 package main
 
 import (
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcap"
-	log "github.com/sirupsen/logrus"
 	"net"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
+	log "github.com/sirupsen/logrus"
 )
 
 const SendBufferSize = 100
@@ -35,7 +36,7 @@ var validLinkTypes = []layers.LinkType{
 
 // takes the list of listen or promisc and returns a list of Listen
 // which then can be initialized
-func processListener(interfaces *[]string, lp []string, promisc bool, bpf_filter string, ports []int32, to time.Duration) []Listen {
+func processListener(interfaces *[]string, lp []string, bpf_filter string, ports []int32, to time.Duration) []Listen {
 	var ret = []Listen{}
 	for _, i := range lp {
 		s := strings.Split(i, "@")
@@ -52,10 +53,14 @@ func processListener(interfaces *[]string, lp []string, promisc bool, bpf_filter
 		*interfaces = append(*interfaces, iname)
 
 		netif, err := net.InterfaceByName(iname)
+
 		if err != nil {
 			log.Fatalf("Unable to get network index for %s: %s", iname, err)
 		}
 		log.Debugf("%s: ifIndex: %d", iname, netif.Index)
+
+		// check if interface has broadcast capabilities, when yes promisc = true
+		hasBroadcast := (netif.Flags & net.FlagBroadcast) != 0
 
 		new := Listen{
 			iname:   iname,
@@ -64,7 +69,7 @@ func processListener(interfaces *[]string, lp []string, promisc bool, bpf_filter
 			ports:   ports,
 			ipaddr:  ipaddr,
 			timeout: to,
-			promisc: promisc,
+			promisc: hasBroadcast,
 			handle:  nil,
 			sendpkt: make(chan Send, SendBufferSize),
 		}
@@ -75,11 +80,11 @@ func processListener(interfaces *[]string, lp []string, promisc bool, bpf_filter
 
 // takes list of interfaces to listen on, if we should listen promiscuously,
 // the BPF filter, list of ports and timeout and returns a list of processListener
-func initalizeListeners(inames []string, promisc bool, bpf_filter string, ports []int32, timeout time.Duration) []Listen {
+func initializeListeners(inames []string, bpf_filter string, ports []int32, timeout time.Duration) []Listen {
 	// process our promisc and listen interfaces
 	var interfaces = []string{}
 	var listeners []Listen
-	a := processListener(&interfaces, inames, promisc, bpf_filter, ports, timeout)
+	a := processListener(&interfaces, inames, bpf_filter, ports, timeout)
 	for _, x := range a {
 		listeners = append(listeners, x)
 	}
