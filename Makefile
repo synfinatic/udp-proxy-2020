@@ -72,11 +72,19 @@ test: vet unittest ## Run all tests
 .prepare: $(DIST_DIR)
 
 $(DIST_DIR):
-	mkdir -p $(DIST_DIR)
+	@mkdir -p $(DIST_DIR)
 
 .PHONY: fmt
 fmt: ## Format Go code
-	cd cmd && go fmt *.go
+	@go fmt cmd
+
+.PHONY: test-fmt
+test-fmt: fmt
+	@if test `git diff | wc -l` -gt 0; then \
+	    echo "Code changes detected when running 'go fmt':" ; \
+	    git diff -Xfiles ; \
+	    exit -1 ; \
+	fi
 
 
 ######################################################################
