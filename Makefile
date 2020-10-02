@@ -80,9 +80,17 @@ fmt: ## Format Go code
 
 .PHONY: test-fmt
 test-fmt: fmt
-	@if test `git diff | wc -l` -gt 0; then \
+	@if test `git diff cmd | wc -l` -gt 0; then \
 	    echo "Code changes detected when running 'go fmt':" ; \
 	    git diff -Xfiles ; \
+	    exit -1 ; \
+	fi
+
+.PHONY: test-tidy
+test-tidy:
+	@go mod tidy
+	@if test `git diff go.mod | wc -l` -gt 0; then \
+	    echo "Need to run 'go mod tidy' to clean up go.mod" ; \
 	    exit -1 ; \
 	fi
 

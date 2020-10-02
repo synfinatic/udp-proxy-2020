@@ -27,5 +27,11 @@ jobs:
     - name: Build
       run: make
 
-    - name: Tests
-      run: make test && make test-fmt
+    - name: Run tests
+      run: make test 
+      
+    - name: Check Go Format
+      run: make test-fmt 
+        
+    - name: Check go.mod is tidy
+      run: make test-tidy
