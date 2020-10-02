@@ -6,5 +6,4 @@ require (
 	github.com/google/gopacket v1.1.18
 	github.com/sirupsen/logrus v1.6.0
 	github.com/spf13/pflag v1.0.5
-	golang.org/x/net v0.0.0-20190404232315-eb5bcb51f2a3
 )
