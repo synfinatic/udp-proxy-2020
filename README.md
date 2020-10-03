@@ -78,3 +78,10 @@ udp-proxy-2020 is still under heavy development.  Run `udp-proxy-2020 --help`
 for a current list of command line options.  Also, please note on many operating
 systems you will need to run it as the `root` user.  Linux systems can
 optionally grant the `CAP_NET_RAW` capability.
+
+Currently there are only a few flags you probaly need to worry about:
+
+ * `--interface` -- specify two or more network interfaces to listen on 
+ * `--port` -- specify one or more UDP ports to monitor
+
+There are other flags of course, run `./udp-proxy-2020 --help` for a full list.

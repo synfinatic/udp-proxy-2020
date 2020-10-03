@@ -50,8 +50,9 @@ func initializeInterface(l *Listen) {
 	}
 
 	// set our BPF filter
-	log.Debugf("%s: applying BPF Filter: %s", l.iname, l.filter)
-	err = l.handle.SetBPFFilter(l.filter)
+	bpf_filter := buildBPFFilter(l.ports)
+	log.Debugf("%s: applying BPF Filter: %s", l.iname, bpf_filter)
+	err = l.handle.SetBPFFilter(bpf_filter)
 	if err != nil {
 		log.Fatalf("%s: %s", l.iname, err)
 	}

@@ -1,8 +1,8 @@
 package main
 
 import (
+	"encoding/binary"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
@@ -16,15 +16,16 @@ const SendBufferSize = 100
 
 // Struct containing everything for an interface
 type Listen struct {
-	iname   string         // interface to use
-	iface   *net.Interface // interface descriptor
-	filter  string         // bpf filter string to listen on
-	ports   []int32        // port(s) we listen for packets
-	ipaddr  string         // dstip we send packets to
-	promisc bool           // do we enable promisc on this interface?
-	handle  *pcap.Handle
-	timeout time.Duration
-	sendpkt chan Send // channel used to recieve packets we need to send
+	iname     string               // interface to use
+	netif     *net.Interface       // interface descriptor
+	ports     []int32              // port(s) we listen for packets
+	ipaddr    string               // dstip we send packets to
+	promisc   bool                 // do we enable promisc on this interface?
+	handle    *pcap.Handle         // gopacket.pcap handle
+	timeout   time.Duration        // timeout for loop
+	clientTTL time.Duration        // ttl for client cache
+	sendpkt   chan Send            // channel used to recieve packets we need to send
+	clients   map[string]time.Time // keep track of clients for non-promisc interfaces
 }
 
 // List of LayerTypes we support in sendPacket()
@@ -34,61 +35,52 @@ var validLinkTypes = []layers.LinkType{
 	layers.LinkTypeNull,
 }
 
-// takes the list of listen or promisc and returns a list of Listen
-// which then can be initialized
-func processListener(interfaces *[]string, lp []string, bpf_filter string, ports []int32, to time.Duration) []Listen {
-	var ret = []Listen{}
-	for _, i := range lp {
-		s := strings.Split(i, "@")
-		if len(s) != 2 {
-			log.Fatalf("%s is invalid.  Expected: <interface>@<ipaddr>", i)
-		}
-		iname := s[0]
-		ipaddr := s[1]
-
-		iname_prefix := iname + "@"
-		if stringPrefixInSlice(iname_prefix, *interfaces) {
-			log.Fatalf("Can't specify the same interface (%s) multiple times", iname)
-		}
-		*interfaces = append(*interfaces, iname)
-
-		netif, err := net.InterfaceByName(iname)
-
-		if err != nil {
-			log.Fatalf("Unable to get network index for %s: %s", iname, err)
-		}
-		log.Debugf("%s: ifIndex: %d", iname, netif.Index)
-
-		// check if interface has broadcast capabilities, when yes promisc = true
-		hasBroadcast := (netif.Flags & net.FlagBroadcast) != 0
-
-		new := Listen{
-			iname:   iname,
-			iface:   netif,
-			filter:  bpf_filter,
-			ports:   ports,
-			ipaddr:  ipaddr,
-			timeout: to,
-			promisc: hasBroadcast,
-			handle:  nil,
-			sendpkt: make(chan Send, SendBufferSize),
-		}
-		ret = append(ret, new)
+// Creates a Listen struct for the given interface, promisc mode, udp sniff ports and timeout
+func newListener(netif *net.Interface, promisc bool, ports []int32, to time.Duration) Listen {
+	log.Debugf("%s: ifIndex: %d", netif.Name, netif.Index)
+	addrs, err := netif.Addrs()
+	if err != nil {
+		log.Fatalf("Unable to obtain addresses for %s", netif.Name)
 	}
-	return ret
-}
+	var bcastaddr string = ""
+	// only calc the broadcast address on promiscuous interfaces
+	// for non-promisc, we use our clients
+	if !promisc {
+		for _, addr := range addrs {
+			log.Debugf("%s network: %s\t\tstring: %s", netif.Name, addr.Network(), addr.String())
 
-// takes list of interfaces to listen on, if we should listen promiscuously,
-// the BPF filter, list of ports and timeout and returns a list of processListener
-func initializeListeners(inames []string, bpf_filter string, ports []int32, timeout time.Duration) []Listen {
-	// process our promisc and listen interfaces
-	var interfaces = []string{}
-	var listeners []Listen
-	a := processListener(&interfaces, inames, bpf_filter, ports, timeout)
-	for _, x := range a {
-		listeners = append(listeners, x)
+			_, ipNet, err := net.ParseCIDR(addr.String())
+			if err != nil {
+				log.Debugf("%s: Unable to parse CIDR: %s (%s)", netif.Name, addr.String(), addr.Network())
+				continue
+			}
+			if ipNet.IP.To4() == nil {
+				continue // Skip non-IPv4 addresses
+			}
+			// calc broadcast
+			ip := make(net.IP, len(ipNet.IP.To4()))
+			bcastbin := binary.BigEndian.Uint32(ipNet.IP.To4()) | ^binary.BigEndian.Uint32(net.IP(ipNet.Mask).To4())
+			binary.BigEndian.PutUint32(ip, bcastbin)
+			bcastaddr = ip.String()
+		}
+		// promisc interfaces should have a bcast/ipv4 config
+		if len(bcastaddr) == 0 && promisc {
+			log.Fatalf("%s does not have a valid IPv4 configuration", netif.Name)
+		}
 	}
-	return listeners
+	new := Listen{
+		iname:   netif.Name,
+		netif:   netif,
+		ports:   ports,
+		ipaddr:  bcastaddr,
+		timeout: to,
+		promisc: promisc,
+		handle:  nil,
+		sendpkt: make(chan Send, SendBufferSize),
+		clients: make(map[string]time.Time),
+	}
+	log.Debugf("Listen: %v", new)
+	return new
 }
 
 // Our goroutine for processing packets
@@ -108,7 +100,7 @@ func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
 	for {
 		select {
 		case s := <-l.sendpkt: // packet arrived from another interface
-			l.sendPacket(s)
+			l.sendPackets(s)
 		case packet := <-packets: // packet arrived on this interfaces
 			// is it legit?
 			if packet.NetworkLayer() == nil || packet.TransportLayer() == nil || packet.TransportLayer().LayerType() != layers.LayerTypeUDP {
@@ -118,16 +110,28 @@ func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
 				log.Errorf("%s: Unable to decode: %s", l.iname, errx.Error())
 			}
 
+			// if our interface is non-promisc, learn the client IP
+			if l.promisc {
+				l.learnClientIP(packet)
+			}
+
 			log.Debugf("%s: received packet and fowarding onto other interfaces", l.iname)
 			s.Send(packet, l.iname, l.handle.LinkType())
 		case <-ticker: // our timer
 			log.Debugf("handlePackets(%s) ticker", l.iname)
+			// clean client cache
+			for k, v := range l.clients {
+				if v.Before(time.Now()) {
+					log.Debugf("%s removing %s after %dsec", l.iname, k, l.clientTTL)
+					delete(l.clients, k)
+				}
+			}
 		}
 	}
 }
 
 // Does the heavy lifting of editing & sending the packet onwards
-func (l *Listen) sendPacket(sndpkt Send) {
+func (l *Listen) sendPackets(sndpkt Send) {
 	var eth layers.Ethernet
 	var loop layers.Loopback // BSD NULL/Loopback used for OpenVPN tunnels/etc
 	var ip4 layers.IPv4      // we only support v4
@@ -146,7 +150,6 @@ func (l *Listen) sendPacket(sndpkt Send) {
 		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &eth, &ip4, &udp, &payload)
 	default:
 		log.Fatalf("Unsupported source linktype: 0x%02x", sndpkt.linkType)
-		return
 	}
 
 	// try decoding our packet
@@ -156,7 +159,7 @@ func (l *Listen) sendPacket(sndpkt Send) {
 		return
 	}
 
-	// packet was decoded
+	// was packet decoded?  In theory, this should never happen because our BPF filter...
 	found_udp := false
 	found_ipv4 := false
 	for _, layerType := range decoded {
@@ -172,6 +175,27 @@ func (l *Listen) sendPacket(sndpkt Send) {
 		return
 	}
 
+	if !l.promisc {
+		// send one packet to broadcast IP
+		dstip := net.ParseIP(l.ipaddr).To4()
+		if err, bytes := l.sendPacket(dstip, eth, loop, ip4, udp, payload); err != nil {
+			log.Warnf("Unable to send %d bytes from %s out %s: %s",
+				bytes, sndpkt.srcif, l.iname, err)
+		}
+	} else {
+		// sent packet to every client
+		for ip, _ := range l.clients {
+			dstip := net.ParseIP(ip).To4()
+			if err, bytes := l.sendPacket(dstip, eth, loop, ip4, udp, payload); err != nil {
+				log.Warnf("Unable to send %d bytes from %s out %s: %s",
+					bytes, sndpkt.srcif, l.iname, err)
+			}
+		}
+	}
+}
+
+func (l *Listen) sendPacket(dstip net.IP, eth layers.Ethernet, loop layers.Loopback,
+	ip4 layers.IPv4, udp layers.UDP, payload gopacket.Payload) (error, int) {
 	// Build our packet to send
 	buffer := gopacket.NewSerializeBuffer()
 	csum_opts := gopacket.SerializeOptions{
@@ -215,7 +239,7 @@ func (l *Listen) sendPacket(sndpkt Send) {
 		Protocol:   ip4.Protocol,
 		Checksum:   0, // reset to calc checksums
 		SrcIP:      ip4.SrcIP,
-		DstIP:      net.ParseIP(l.ipaddr).To4(),
+		DstIP:      dstip,
 		Options:    ip4.Options,
 	}
 	if err := new_ip4.SerializeTo(buffer, csum_opts); err != nil {
@@ -223,7 +247,7 @@ func (l *Listen) sendPacket(sndpkt Send) {
 	}
 
 	// Loopback or Ethernet
-	if (l.iface.Flags & net.FlagLoopback) > 0 {
+	if (l.netif.Flags & net.FlagLoopback) > 0 {
 		loop := layers.Loopback{
 			Family: layers.ProtocolFamilyIPv4,
 		}
@@ -235,7 +259,7 @@ func (l *Listen) sendPacket(sndpkt Send) {
 		new_eth := layers.Ethernet{
 			BaseLayer:    layers.BaseLayer{},
 			DstMAC:       net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
-			SrcMAC:       l.iface.HardwareAddr,
+			SrcMAC:       l.netif.HardwareAddr,
 			EthernetType: layers.EthernetTypeIPv4,
 		}
 		if err := new_eth.SerializeTo(buffer, opts); err != nil {
@@ -244,11 +268,45 @@ func (l *Listen) sendPacket(sndpkt Send) {
 	}
 
 	outgoingPacket := buffer.Bytes()
-	log.Debugf("%s: packet len: %d: %v", l.iname, len(outgoingPacket), outgoingPacket)
-	err := l.handle.WritePacketData(outgoingPacket)
-	if err != nil {
-		log.Warnf("Unable to send %d bytes from %s out %s: %s",
-			len(outgoingPacket), sndpkt.srcif, l.iname, err)
+	log.Debugf("%s => %s: packet len: %d: %v", l.iname, dstip.String(), len(outgoingPacket), outgoingPacket)
+	return l.handle.WritePacketData(outgoingPacket), len(outgoingPacket)
+}
+
+func (l *Listen) learnClientIP(packet gopacket.Packet) {
+	var eth layers.Ethernet
+	var loop layers.Loopback
+	var ip4 layers.IPv4
+	var udp layers.UDP
+	var payload gopacket.Payload
+	var parser *gopacket.DecodingLayerParser
+
+	switch l.handle.LinkType() {
+	case layers.LinkTypeNull:
+		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeLoopback, &loop, &ip4, &udp, &payload)
+	case layers.LinkTypeLoop:
+		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeLoopback, &loop, &ip4, &udp, &payload)
+	case layers.LinkTypeEthernet:
+		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &eth, &ip4, &udp, &payload)
+	default:
+		log.Fatalf("Unsupported source linktype: 0x%02x", l.handle.LinkType())
+	}
+
+	decoded := []gopacket.LayerType{}
+	if err := parser.DecodeLayers(packet.Data(), &decoded); err != nil {
+		log.Debugf("Unable to decoded client IP on %s: %s", l.iname, err)
+	}
+
+	found_ipv4 := false
+	for _, layerType := range decoded {
+		switch layerType {
+		case layers.LayerTypeIPv4:
+			// found our v4 header
+			found_ipv4 = true
+		}
+	}
+
+	if found_ipv4 {
+		l.clients[ip4.SrcIP.String()] = time.Now().Add(l.clientTTL)
 	}
 }
 
