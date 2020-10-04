@@ -27,11 +27,11 @@ host and rightfully ignored.
 
 ### So what does this do?
 
-Instead of using a normal UDP socket to listen for broadcast messages, udp-proxy-2020
+Instead of using a normal UDP socket to listen for broadcast messages, `udp-proxy-2020`
 uses [libpcap](https://github.com/the-tcpdump-group/libpcap) to "sniff" the UDP
 broadcast messages.  This means it can be a lot more flexible about what packets
-it "sees" so it can then sends them via libpcap/packet injection as well.  If
-this makes you go "ew", well,
+it "sees" so it can then sends them via libpcap/packet injection out all the other
+configured interfaces.  If this makes you go "ew", well,
 [welcome to 2020](https://google.com/search?q=why+is+2020+the+worst).
 
 ### The good news...
@@ -53,9 +53,12 @@ Pretty much any Unix-like system is supported because the dependcy list is only
 [Ubiquiti](https://www.ui.com) USG/EdgeRouter as those are quite common among
 the Roon user community.
 
+I [release binaries](https://github.com/synfinatic/udp-proxy-2020/releases)
+for Linux/x86_64, Linux/MIPS64, FreeBSD/amd64 and MacOS/x86_64.
+
 ## Building udp-proxy-2020
 
-If you are building for the same platform you intend to run udp-proxy-2020 
+If you are building for the same platform you intend to run `udp-proxy-2020`
 then you just need to make sure you have `libpcap` and the necessary headers
 (you may need a `-dev` package for that) and run `make` or `gmake` as
 appropriate (we need GNU Make, not BSD Make).
@@ -74,14 +77,26 @@ You can get a full list of make targets and basic info about them by running:
 
 ## Usage
 
-udp-proxy-2020 is still under heavy development.  Run `udp-proxy-2020 --help`
+`udp-proxy-2020` is still under heavy development.  Run `udp-proxy-2020 --help`
 for a current list of command line options.  Also, please note on many operating
 systems you will need to run it as the `root` user.  Linux systems can
 optionally grant the `CAP_NET_RAW` capability.
 
 Currently there are only a few flags you probaly need to worry about:
 
- * `--interface` -- specify two or more network interfaces to listen on 
+ * `--interface` -- specify two or more network interfaces to listen on
  * `--port` -- specify one or more UDP ports to monitor
 
 There are other flags of course, run `./udp-proxy-2020 --help` for a full list.
+
+## FAQ
+
+### So is it a "proxy"?  Are there any proxy config settings I need to configure in my app?
+
+Nope, it's not a proxy.  It's more like a router.  You don't need to make
+any changes other than running it on your home router/firewall.
+
+### Then why did you call it udp-proxy-2020?
+
+Honestly, I didn't really think much about the name and this was the first thing
+that came to my mind.
