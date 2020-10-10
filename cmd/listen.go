@@ -33,6 +33,7 @@ var validLinkTypes = []layers.LinkType{
 	layers.LinkTypeLoop,
 	layers.LinkTypeEthernet,
 	layers.LinkTypeNull,
+	layers.LinkTypeRaw,
 }
 
 // Creates a Listen struct for the given interface, promisc mode, udp sniff ports and timeout
@@ -148,6 +149,8 @@ func (l *Listen) sendPackets(sndpkt Send) {
 		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeLoopback, &loop, &ip4, &udp, &payload)
 	case layers.LinkTypeEthernet:
 		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &eth, &ip4, &udp, &payload)
+	case layers.LinkTypeRaw:
+		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeIPv4, &ip4, &udp, &payload)
 	default:
 		log.Fatalf("Unsupported source linktype: 0x%02x", sndpkt.linkType)
 	}
@@ -246,15 +249,18 @@ func (l *Listen) sendPacket(dstip net.IP, eth layers.Ethernet, loop layers.Loopb
 		log.Fatalf("can't serialize IP header: %v", new_ip4)
 	}
 
-	// Loopback or Ethernet
-	if (l.netif.Flags & net.FlagLoopback) > 0 {
+	// Add our L2 header to the buffer
+	switch l.handle.LinkType() {
+	case layers.LinkTypeNull, layers.LinkTypeLoop:
 		loop := layers.Loopback{
 			Family: layers.ProtocolFamilyIPv4,
 		}
 		if err := loop.SerializeTo(buffer, opts); err != nil {
 			log.Fatalf("can't serialize Loop header: %v", loop)
 		}
-	} else {
+	case layers.LinkTypeRaw:
+		// nothing
+	case layers.LinkTypeEthernet:
 		// build a new ethernet header
 		new_eth := layers.Ethernet{
 			BaseLayer:    layers.BaseLayer{},
@@ -287,6 +293,8 @@ func (l *Listen) learnClientIP(packet gopacket.Packet) {
 		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeLoopback, &loop, &ip4, &udp, &payload)
 	case layers.LinkTypeEthernet:
 		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &eth, &ip4, &udp, &payload)
+	case layers.LinkTypeRaw:
+		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeIPv4, &ip4, &udp, &payload)
 	default:
 		log.Fatalf("Unsupported source linktype: 0x%02x", l.handle.LinkType())
 	}
