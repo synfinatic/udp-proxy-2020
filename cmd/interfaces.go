@@ -46,7 +46,7 @@ func initializeInterface(l *Listen) {
 	}
 
 	if !isValidLayerType(l.handle.LinkType()) {
-		log.Fatalf("%s: has an invalid layer type: 0x%02x", l.iname, l.handle.LinkType())
+		log.Fatalf("%s: has an invalid layer type: %s", l.iname, l.handle.LinkType().String())
 	}
 
 	// set our BPF filter
