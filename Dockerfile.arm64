@@ -1,0 +1,38 @@
+FROM ubuntu:20.04 as base
+ENV DEBIAN_FRONTEND=noninteractive
+
+# base applications
+RUN apt-get update && apt-get install -y tzdata wget make git flex bison
+
+# all our cross compile stuff
+RUN apt-get install -y \
+    binutils-aarch64-linux-gnu \
+    linux-libc-dev-arm64-cross \
+    gccgo-10-aarch64-linux-gnu \
+    gcc-10-aarch64-linux-gnu \
+    golang-1.14-go \
+    libgo14-arm64-cross \
+    libgcc-10-dev-arm64-cross \
+    libc6-arm64-cross \
+    libc6-dev-arm64-cross
+
+# don't actually use this... now
+RUN mkdir -p /build/bin && cd /build/bin \
+    ln -s /usr/bin/aarch64-linux-gnu-gccgo-10 gccgo \
+    ln -s /usr/bin/aarch64-linux-gnu-gcc-ar-10 ar \
+    ln -s /usr/bin/aranlibch64-linux-gnu-gcc-ranlib-10 ranlib \
+    ln -s /usr/bin/aarch64-linux-gnu-gcc-10 gcc
+
+# build libpcap
+FROM base as libpcap
+ENV LIBPCAP_VERSION=1.9.1
+WORKDIR /build
+RUN wget -qO - https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz | tar zxf - && \
+    cd libpcap-${LIBPCAP_VERSION} && \
+    CC=aarch64-linux-gnu-gcc-10 BUILD_CC=gcc AR=aarch64-linux-gnu-gcc-ar-10  RANLIB=aarch64-linux-gnu-gcc-ranlib-10 \
+        ./configure --build i686-pc-linux-gnu --host aarch64-linux-gnu --prefix=/usr/aarch64-linux-gnu && make install
+
+# build our app
+FROM libpcap
+WORKDIR /build/udp-proxy-2020
+ENTRYPOINT PATH=/build/bin:/usr/lib/go-1.14/bin:${PATH} GOROOT=/usr/lib/go-1.14 make .arm64-static
