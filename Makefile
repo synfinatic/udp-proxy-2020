@@ -35,7 +35,7 @@ $(STR2PCAP_NAME): str2pcap/*.go
 
 include help.mk  # place after ALL target and before all other targets
 
-release: linux-static freebsd mips64-static ## Build our release binaries
+release: linux-static freebsd mips64-static $(OUTPUT_NAME) ## Build our release binaries
 
 .PHONY: run
 run: cmd/*.go  ## build and run udp-proxy-2020 using $UDP_PROXY_2020_ARGS
