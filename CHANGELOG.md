@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.0.5 - 16-10-2020
+
 Added:
 
 - Support for Wireguard (LinkType RAW) interfaces #29
