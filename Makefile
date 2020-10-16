@@ -23,8 +23,15 @@ BUILDINFOS         := $(shell date +%FT%T%z)$(BUILDINFOSDET)
 HOSTNAME           := $(shell hostname)
 LDFLAGS            := -X "main.Version=$(PROJECT_VERSION)" -X "main.Buildinfos=$(BUILDINFOS)" -X "main.Tag=$(PROJECT_TAG)" -X "main.CommitID=$(PROJECT_COMMIT)"
 OUTPUT_NAME        := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-$(GOOS)-$(GOARCH)
+STR2PCAP_NAME      := $(DIST_DIR)str2pcap-$(PROJECT_VERSION)-$(GOOS)-$(GOARCH)
 
-ALL: $(OUTPUT_NAME) ## Build binary
+
+ALL: $(OUTPUT_NAME) str2pcap ## Build binary
+
+str2pcap: $(STR2PCAP_NAME)
+
+$(STR2PCAP_NAME): str2pcap/*.go
+	go build -o $(STR2PCAP_NAME) str2pcap/*.go
 
 include help.mk  # place after ALL target and before all other targets
 
