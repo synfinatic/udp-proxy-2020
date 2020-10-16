@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+Added:
+- Support for cross-compiling arm64/Linux for RasPi #31
+
 ## v0.0.5 - 16-10-2020
 
 Added:

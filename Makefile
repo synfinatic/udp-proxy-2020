@@ -35,7 +35,7 @@ $(STR2PCAP_NAME): str2pcap/*.go
 
 include help.mk  # place after ALL target and before all other targets
 
-release: linux-static freebsd mips64-static $(OUTPUT_NAME) ## Build our release binaries
+release: linux-static freebsd mips64-static arm64-static $(OUTPUT_NAME) ## Build our release binaries
 
 .PHONY: run
 run: cmd/*.go  ## build and run udp-proxy-2020 using $UDP_PROXY_2020_ARGS
@@ -190,7 +190,7 @@ mips64-shell: .prepare ## SSH into Linux/MIPS64 build Docker container
 	docker run -it --rm \
 	    --volume $(shell pwd):/build/udp-proxy-2020 \
 	    --entrypoint /bin/bash \
-	    $(DOCKER_REPO)/$(PROJECT_NAME)-mips64:latest 
+	    $(DOCKER_REPO)/$(PROJECT_NAME)-mips64:latest
 
 .mips64-static: $(MIPS64_S_NAME)
 $(MIPS64_S_NAME): .prepare
@@ -203,3 +203,34 @@ $(MIPS64_S_NAME): .prepare
 .PHONY: mips64-clean
 mips64-clean: ## Remove Linux/MIPS64 Docker image
 	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME)-mips64:latest
+
+######################################################################
+# ARM64 targets for building for Linux/ARM64 RaspberryPi/etc
+######################################################################
+ARM64_S_NAME      := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-arm64-static
+
+.PHONY: arm64-static
+arm64-static: .prepare ## Build Linux/arm64 static binary in Docker container
+	docker build -t $(DOCKER_REPO)/$(PROJECT_NAME)-arm64:latest -f Dockerfile.arm64 .
+	docker run --rm \
+	    --volume $(shell pwd):/build/udp-proxy-2020 \
+	    $(DOCKER_REPO)/$(PROJECT_NAME)-arm64:latest
+
+.PHONY: arm64-shell
+arm64-shell: .prepare ## SSH into Linux/arm64 build Docker container
+	docker run -it --rm \
+	    --volume $(shell pwd):/build/udp-proxy-2020 \
+	    --entrypoint /bin/bash \
+	    $(DOCKER_REPO)/$(PROJECT_NAME)-arm64:latest
+
+.arm64-static: $(ARM64_S_NAME)
+$(ARM64_S_NAME): .prepare
+	LDFLAGS='-l/usr/aarch64-linux-gnu/lib/libpcap.a' \
+	    GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc-10 \
+	    PKG_CONFIG_PATH=/usr/aarch64-linux-gnu/lib/pkgconfig \
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(ARM64_S_NAME) cmd/*.go
+	@echo "Created: $(arm64_S_NAME)"
+
+.PHONY: arm64-clean
+arm64-clean: ## Remove Linux/arm64 Docker image
+	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME)-arm64:latest
