@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -142,17 +144,15 @@ func (l *Listen) sendPackets(sndpkt Send) {
 
 	log.Debugf("processing packet from %s on %s", sndpkt.srcif, l.iname)
 
-	switch sndpkt.linkType {
-	case layers.LinkTypeNull:
+	switch sndpkt.linkType.String() {
+	case layers.LinkTypeNull.String(), layers.LinkTypeLoop.String():
 		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeLoopback, &loop, &ip4, &udp, &payload)
-	case layers.LinkTypeLoop:
-		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeLoopback, &loop, &ip4, &udp, &payload)
-	case layers.LinkTypeEthernet:
+	case layers.LinkTypeEthernet.String():
 		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &eth, &ip4, &udp, &payload)
-	case layers.LinkTypeRaw:
+	case layers.LinkTypeRaw.String():
 		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeIPv4, &ip4, &udp, &payload)
 	default:
-		log.Fatalf("Unsupported source linktype: 0x%02x", sndpkt.linkType)
+		log.Fatalf("Unsupported source linktype: %s", sndpkt.linkType.String())
 	}
 
 	// try decoding our packet
@@ -187,6 +187,9 @@ func (l *Listen) sendPackets(sndpkt Send) {
 		}
 	} else {
 		// sent packet to every client
+		if len(l.clients) == 0 {
+			log.Debugf("%s: Unable to send packet; no discovered clients", l.iname)
+		}
 		for ip, _ := range l.clients {
 			dstip := net.ParseIP(ip).To4()
 			if err, bytes := l.sendPacket(dstip, eth, loop, ip4, udp, payload); err != nil {
@@ -250,17 +253,15 @@ func (l *Listen) sendPacket(dstip net.IP, eth layers.Ethernet, loop layers.Loopb
 	}
 
 	// Add our L2 header to the buffer
-	switch l.handle.LinkType() {
-	case layers.LinkTypeNull, layers.LinkTypeLoop:
+	switch l.handle.LinkType().String() {
+	case layers.LinkTypeNull.String(), layers.LinkTypeLoop.String():
 		loop := layers.Loopback{
 			Family: layers.ProtocolFamilyIPv4,
 		}
 		if err := loop.SerializeTo(buffer, opts); err != nil {
 			log.Fatalf("can't serialize Loop header: %v", loop)
 		}
-	case layers.LinkTypeRaw:
-		// nothing
-	case layers.LinkTypeEthernet:
+	case layers.LinkTypeEthernet.String():
 		// build a new ethernet header
 		new_eth := layers.Ethernet{
 			BaseLayer:    layers.BaseLayer{},
@@ -271,10 +272,15 @@ func (l *Listen) sendPacket(dstip net.IP, eth layers.Ethernet, loop layers.Loopb
 		if err := new_eth.SerializeTo(buffer, opts); err != nil {
 			log.Fatalf("can't serialize Eth header: %v", new_eth)
 		}
+	case layers.LinkTypeRaw.String():
+		// no L2 header
+	default:
+		log.Warnf("Unsupported linktype: %s", l.handle.LinkType().String())
 	}
 
 	outgoingPacket := buffer.Bytes()
-	log.Debugf("%s => %s: packet len: %d: %v", l.iname, dstip.String(), len(outgoingPacket), outgoingPacket)
+	log.Debugf("%s => %s: packet len: %d: %s",
+		l.iname, dstip.String(), len(outgoingPacket), hex.EncodeToString(outgoingPacket))
 	return l.handle.WritePacketData(outgoingPacket), len(outgoingPacket)
 }
 
@@ -286,17 +292,15 @@ func (l *Listen) learnClientIP(packet gopacket.Packet) {
 	var payload gopacket.Payload
 	var parser *gopacket.DecodingLayerParser
 
-	switch l.handle.LinkType() {
-	case layers.LinkTypeNull:
+	switch l.handle.LinkType().String() {
+	case layers.LinkTypeNull.String(), layers.LinkTypeLoop.String():
 		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeLoopback, &loop, &ip4, &udp, &payload)
-	case layers.LinkTypeLoop:
-		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeLoopback, &loop, &ip4, &udp, &payload)
-	case layers.LinkTypeEthernet:
+	case layers.LinkTypeEthernet.String():
 		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &eth, &ip4, &udp, &payload)
-	case layers.LinkTypeRaw:
+	case layers.LinkTypeRaw.String():
 		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeIPv4, &ip4, &udp, &payload)
 	default:
-		log.Fatalf("Unsupported source linktype: 0x%02x", l.handle.LinkType())
+		log.Fatalf("Unsupported source linktype: %s", l.handle.LinkType().String())
 	}
 
 	decoded := []gopacket.LayerType{}
@@ -314,6 +318,7 @@ func (l *Listen) learnClientIP(packet gopacket.Packet) {
 	}
 
 	if found_ipv4 {
+		log.Debugf("%s: Learned client IP: %s", l.iname, ip4.SrcIP.String())
 		l.clients[ip4.SrcIP.String()] = time.Now().Add(l.clientTTL)
 	}
 }
@@ -321,7 +326,7 @@ func (l *Listen) learnClientIP(packet gopacket.Packet) {
 // Returns if the provided layertype is valid
 func isValidLayerType(layertype layers.LinkType) bool {
 	for _, b := range validLinkTypes {
-		if b == layertype {
+		if strings.Compare(b.String(), layertype.String()) == 0 {
 			return true
 		}
 	}
