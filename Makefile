@@ -4,7 +4,7 @@ GOARCH ?= $(shell uname -m)
 BUILDINFOSDET ?=
 UDP_PROXY_2020_ARGS ?=
 
-PROJECT_VERSION    := 0.0.5
+PROJECT_VERSION    := 0.0.6
 DOCKER_REPO        := synfinatic
 PROJECT_NAME       := udp-proxy-2020
 PROJECT_TAG        := $(shell git describe --tags 2>/dev/null $(git rev-list --tags --max-count=1))
@@ -138,6 +138,7 @@ linux-static: ## Build static Linux/x86_64 binary using Docker
 .PHONY: linux-clean
 linux-clean: ## Remove Linux/x86_64 Docker image
 	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME)-linux:latest
+	rm dist/*linux-x86_64-static
 
 .PHONY: linux-shell
 linux-shell: ## Get a shell in Linux/x86_64 Docker container
@@ -172,6 +173,7 @@ freebsd-shell: ## SSH into FreeBSD Vagrant VM
 
 freebsd-clean: ## Destroy FreeBSD Vagrant VM
 	vagrant destroy -f
+	rm dist/*freebsd-*
 
 ######################################################################
 # MIPS64 targets for building for Ubiquiti USG/Edgerouter
@@ -203,6 +205,7 @@ $(MIPS64_S_NAME): .prepare
 .PHONY: mips64-clean
 mips64-clean: ## Remove Linux/MIPS64 Docker image
 	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME)-mips64:latest
+	rm dist/*linux-mips64
 
 ######################################################################
 # ARM64 targets for building for Linux/ARM64 RaspberryPi/etc
@@ -234,3 +237,4 @@ $(ARM64_S_NAME): .prepare
 .PHONY: arm64-clean
 arm64-clean: ## Remove Linux/arm64 Docker image
 	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME)-arm64:latest
+	rm dist/*linux-arm64

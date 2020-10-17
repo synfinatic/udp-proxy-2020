@@ -4,7 +4,7 @@ Vagrant.configure("2") do |config|
   config.vm.box_version = "2020.04.23"
   config.ssh.shell = "sh"
   config.vm.provision "shell",
-    inline: "pkg install -y git gmake go libpcap"
+    inline: "pkg install -y git gmake go libpcap virtualbox-ose-kmod virtualbox-ose-additions-nox11"
   # have to rsync our code over to build
   config.vm.synced_folder ".", "/home/vagrant/udp-proxy-2020", create: true, disabled: false, id: 'source-code', type: "rsync"
   config.vm.provider :virtualbox do |vb|
@@ -15,6 +15,7 @@ Vagrant.configure("2") do |config|
   config.trigger.after :up do |trigger|
     trigger.info = "building pfSense/FreeBSD binary..."
     trigger.name = "build-binary"
+    trigger.run = {inline: "vagrant rsync"}
     trigger.run_remote = {inline: "bash -c 'cd udp-proxy-2020 && /usr/local/bin/gmake'"}
   end
 end
