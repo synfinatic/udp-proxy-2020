@@ -110,6 +110,6 @@ that came to my mind.
 
 ### How can I get udp-proxy-2020 working with Wireguard on Ubiquiti USG?
 
-So I haven't done this myself, but Bert Verhoeven over on the Roon Community
+So I haven't done this myself, but Bart Verhoeven over on the Roon Community
 forums wrote up
 [this really detailed how to](https://community.roonlabs.com/t/how-to-roon-mobile-over-wireguard-on-a-unifi-usg/124477).
