@@ -5,6 +5,9 @@
 Added:
 - Support for cross-compiling arm64/Linux for RasPi #31
 
+Fixed:
+- Vagrant file for FreeBSD now always builds the latest code #39
+
 ## v0.0.5 - 16-10-2020
 
 Added:
