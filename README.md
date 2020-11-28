@@ -86,6 +86,9 @@ Currently there are only a few flags you probaly need to worry about:
 
  * `--interface` -- specify two or more network interfaces to listen on
  * `--port` -- specify one or more UDP ports to monitor
+ * `--debug` -- enable debugging output
+ * `--fixed-ip` -- Hardcode an <interface>@<ipaddr> to always send traffic to.  Useful
+	for things like OpenVPN in site-to-site mode.
 
 There are other flags of course, run `./udp-proxy-2020 --help` for a full list.
 
@@ -104,7 +107,7 @@ that came to my mind.
 ### What network interface types are supported?
 
  * Ethernet
- * WiFi interfaces which appear as Ethernet 
+ * WiFi interfaces which appear as Ethernet
  * `tun` interfaces, like those used by [OpenVPN](https://openvpn.net)
  * `raw` interfaces, like those used by [Wireguard](https://www.wireguard.com)
 

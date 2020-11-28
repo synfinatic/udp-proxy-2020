@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +18,7 @@ var Tag = "NO-TAG"
 var CommitID = "unknown"
 
 func main() {
+	var _fixed_ip = []string{}
 	var interfaces = []string{}
 	var ports = []int32{}
 	var timeout int64
@@ -24,9 +26,11 @@ func main() {
 	var debug bool
 	var version bool
 	var ilist bool
+	var fixed_ip = map[string][]string{}
 
 	// option parsing
 	flag.StringSliceVar(&interfaces, "interface", []string{}, "Two or more interfaces to use")
+	flag.StringSliceVar(&_fixed_ip, "fixed-ip", []string{}, "IPs to always send to: iface@ip")
 	flag.Int32SliceVar(&ports, "port", []int32{}, "One or more UDP ports to process")
 	flag.Int64Var(&timeout, "timeout", 250, "Timeout in ms")
 	flag.Int64Var(&cachettl, "cachettl", 90, "Client IP cache TTL in sec")
@@ -65,6 +69,20 @@ func main() {
 	// handle our timeout
 	to := parseTimeout(timeout)
 
+	for _, fip := range _fixed_ip {
+		split := strings.Split(fip, "@")
+		if len(split) != 2 {
+			log.Fatalf("--fixed-ip %s is not in the correct format of <interface>@<ip>", fip)
+		}
+		if net.ParseIP(split[1]) == nil {
+			log.Fatalf("--fixed-ip %s IP address is not a valid IPv4 address", fip)
+		}
+		if !stringInSlice(split[0], interfaces) {
+			log.Fatalf("--fixed-ip %s interface must be specified via --interface", fip)
+		}
+		fixed_ip[split[0]] = append(fixed_ip[split[0]], split[1])
+	}
+
 	// create our Listeners
 	var seenInterfaces = []string{}
 	var listeners = []Listen{}
@@ -81,7 +99,7 @@ func main() {
 		}
 
 		var promisc bool = (netif.Flags & net.FlagBroadcast) == 0
-		listeners = append(listeners, newListener(netif, promisc, ports, to))
+		listeners = append(listeners, newListener(netif, promisc, ports, to, fixed_ip[iface]))
 	}
 
 	// init each listener

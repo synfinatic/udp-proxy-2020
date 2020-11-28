@@ -2,8 +2,11 @@
 
 ## Unreleased
 
+## v0.0.6 - ??-??-2020
+
 Added:
-- Support for cross-compiling arm64/Linux for RasPi #31
+- Support for cross-compiling arm64/Linux for RasPi/Ubiquiti UDM(Pro) #31
+- Support Site-to-Site OpenVPN tunnels via --fixed-ip #41
 
 Fixed:
 - Vagrant file for FreeBSD now always builds the latest code #39
