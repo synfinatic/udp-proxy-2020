@@ -39,7 +39,7 @@ var validLinkTypes = []layers.LinkType{
 }
 
 // Creates a Listen struct for the given interface, promisc mode, udp sniff ports and timeout
-func newListener(netif *net.Interface, promisc bool, ports []int32, to time.Duration) Listen {
+func newListener(netif *net.Interface, promisc bool, ports []int32, to time.Duration, fixed_ip []string) Listen {
 	log.Debugf("%s: ifIndex: %d", netif.Name, netif.Index)
 	addrs, err := netif.Addrs()
 	if err != nil {
@@ -71,6 +71,13 @@ func newListener(netif *net.Interface, promisc bool, ports []int32, to time.Dura
 			log.Fatalf("%s does not have a valid IPv4 configuration", netif.Name)
 		}
 	}
+
+	// fixed ip clients
+	clients := make(map[string]time.Time)
+	for _, ip := range fixed_ip {
+		clients[ip] = time.Time{} // zero value
+	}
+
 	new := Listen{
 		iname:   netif.Name,
 		netif:   netif,
@@ -80,7 +87,7 @@ func newListener(netif *net.Interface, promisc bool, ports []int32, to time.Dura
 		promisc: promisc,
 		handle:  nil,
 		sendpkt: make(chan Send, SendBufferSize),
-		clients: make(map[string]time.Time),
+		clients: clients,
 	}
 	log.Debugf("Listen: %v", new)
 	return new
@@ -124,7 +131,8 @@ func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
 			log.Debugf("handlePackets(%s) ticker", l.iname)
 			// clean client cache
 			for k, v := range l.clients {
-				if v.Before(time.Now()) {
+				// zero is hard code values
+				if !v.IsZero() && v.Before(time.Now()) {
 					log.Debugf("%s removing %s after %dsec", l.iname, k, l.clientTTL)
 					delete(l.clients, k)
 				}
@@ -318,8 +326,11 @@ func (l *Listen) learnClientIP(packet gopacket.Packet) {
 	}
 
 	if found_ipv4 {
-		log.Debugf("%s: Learned client IP: %s", l.iname, ip4.SrcIP.String())
-		l.clients[ip4.SrcIP.String()] = time.Now().Add(l.clientTTL)
+		val, exists := l.clients[ip4.SrcIP.String()]
+		if !exists || !val.IsZero() {
+			l.clients[ip4.SrcIP.String()] = time.Now().Add(l.clientTTL)
+			log.Debugf("%s: Learned client IP: %s", l.iname, ip4.SrcIP.String())
+		}
 	}
 }
 
