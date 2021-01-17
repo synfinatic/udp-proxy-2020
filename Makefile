@@ -35,7 +35,7 @@ $(STR2PCAP_NAME): str2pcap/*.go
 
 include help.mk  # place after ALL target and before all other targets
 
-release: linux-amd64 linux-mips64 linux-arm64 $(OUTPUT_NAME) freebsd ## Build our release binaries
+release: linux-amd64 linux-mips64 linux-arm64 $(OUTPUT_NAME) freebsd docker ## Build our release binaries
 
 .PHONY: run
 run: cmd/*.go  ## build and run udp-proxy-2020 using $UDP_PROXY_2020_ARGS
@@ -223,3 +223,27 @@ $(LINUX_ARM64_S_NAME): .prepare
 linux-arm64-clean: ## Remove Linux/arm64 Docker image
 	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME)-arm64:latest
 	rm dist/*linux-arm64
+
+
+DOCKER_VERSION ?= v$(PROJECT_VERSION)
+.PHONY: docker
+docker:  ## Build docker image
+	docker build -t $(DOCKER_REPO)/$(PROJECT_NAME):$(DOCKER_VERSION) \
+	    --build-arg VERSION=$(DOCKER_VERSION) \
+	    -f Dockerfile .
+
+.docker:
+	CGO_ENABLED=1 \
+	go build -ldflags '$(LDFLAGS)' -o dist/udp-proxy-2020 cmd/*.go
+
+docker-shell:  ## get a shell in the docker image
+	docker run --rm -it --network=host \
+	    $(DOCKER_REPO)/$(PROJECT_NAME):$(DOCKER_VERSION) \
+	    /bin/sh
+
+docker-relelase: docker  ## Tag latest and push docker images
+	docker push $(DOCKER_REPO)/$(PROJECT_NAME):$(DOCKER_VERSION)
+	docker tag $(DOCKER_REPO)/$(PROJECT_NAME):$(DOCKER_VERSION) $(DOCKER_REPO)/$(PROJECT_NAME):latest
+	docker push $(DOCKER_REPO)/$(PROJECT_NAME):latest
+
+	

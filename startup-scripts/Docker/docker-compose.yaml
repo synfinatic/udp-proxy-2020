@@ -1,0 +1,12 @@
+version: '3.3'
+services:
+  udp-proxy-2020:
+    image: synfinatic/udp-proxy-2020:latest
+    environment:
+      - PORTS=9003
+      - INTERFACES=eth0,eth1
+      - EXTRA_ARGS="--debug"
+      - TIMEOUT=250
+      - CACHETTL=90
+    restart: always
+    network_mode: host

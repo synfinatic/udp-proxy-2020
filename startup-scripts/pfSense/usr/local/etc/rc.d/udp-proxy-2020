@@ -1,0 +1,46 @@
+#!/bin/sh
+#
+# $FreeBSD$
+#
+# PROVIDE: udp-proxy-2020
+# REQUIRE: DAEMON NETWORKING
+#
+# Add the following lines to /etc/rc.conf.local to enable UDP Proxy 2020
+#
+# udp_proxy_2020_enable="YES"
+#
+
+. /etc/rc.subr
+. /usr/local/etc/udp-proxy-2020.conf
+
+name=udp-proxy-2020
+rcvar=udp_proxy_2020_enable
+pidfile=/var/run/udp-proxy-2020.pid
+
+extra_commands="status cleanup"
+start_cmd="${name}_start"
+stop_cmd="${name}_stop"
+status_cmd="${name}_status"
+cleanup_cmd="${name}_cleanup"
+
+load_rc_config ${name}
+: ${udp_proxy_2020_enable:=no}
+
+
+udp-proxy-2020_start() {
+    /usr/sbin/daemon -cf -p ${pidfile} /usr/local/bin/udp-proxy-2020 ${udp_vars}
+}
+
+udp-proxy-2020_stop() {
+    [ -f ${pidfile} ] && kill `cat ${pidfile}` || echo "Unable to kill ${name}.  Missing pid file?"
+}
+
+udp-proxy-2020_cleanup() {
+    [ -f ${pidfile} ] && rm ${pidfile}
+}
+
+udp-proxy-2020_status() {
+    [ ! -n "`pgrep -F $(pidfile)`" ]
+}
+
+run_rc_command "$1"
