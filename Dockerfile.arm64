@@ -35,4 +35,4 @@ RUN wget -qO - https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz
 # build our app
 FROM libpcap
 WORKDIR /build/udp-proxy-2020
-ENTRYPOINT PATH=/build/bin:/usr/lib/go-1.14/bin:${PATH} GOROOT=/usr/lib/go-1.14 make .arm64-static
+ENTRYPOINT PATH=/build/bin:/usr/lib/go-1.14/bin:${PATH} GOROOT=/usr/lib/go-1.14 make .linux-arm64
