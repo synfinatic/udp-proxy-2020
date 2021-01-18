@@ -41,7 +41,7 @@ release: linux-amd64 linux-mips64 linux-arm64 $(OUTPUT_NAME) freebsd docker ## B
 run: cmd/*.go  ## build and run udp-proxy-2020 using $UDP_PROXY_2020_ARGS
 	sudo go run cmd/*.go $(UDP_PROXY_2020_ARGS)
 
-clean-all: vagrant-clean clean-docker clean ## clean _everything_
+clean-all: vagrant-clean clean-docker clean ## Clean _everything_
 
 clean: ## Remove all binaries in dist
 	rm -f dist/*
@@ -236,14 +236,12 @@ docker:  ## Build docker image
 	CGO_ENABLED=1 \
 	go build -ldflags '$(LDFLAGS)' -o dist/udp-proxy-2020 cmd/*.go
 
-docker-shell:  ## get a shell in the docker image
+docker-shell:  ## Get a shell in the docker image
 	docker run --rm -it --network=host \
 	    $(DOCKER_REPO)/$(PROJECT_NAME):$(DOCKER_VERSION) \
 	    /bin/sh
 
-docker-relelase: docker  ## Tag latest and push docker images
+docker-release: docker  ## Tag latest and push docker images
 	docker push $(DOCKER_REPO)/$(PROJECT_NAME):$(DOCKER_VERSION)
 	docker tag $(DOCKER_REPO)/$(PROJECT_NAME):$(DOCKER_VERSION) $(DOCKER_REPO)/$(PROJECT_NAME):latest
 	docker push $(DOCKER_REPO)/$(PROJECT_NAME):latest
-
-	
