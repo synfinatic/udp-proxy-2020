@@ -41,7 +41,7 @@ release: linux-amd64 linux-mips64 linux-arm64 $(OUTPUT_NAME) freebsd ## Build ou
 run: cmd/*.go  ## build and run udp-proxy-2020 using $UDP_PROXY_2020_ARGS
 	sudo go run cmd/*.go $(UDP_PROXY_2020_ARGS)
 
-clean-all: vagrant-clean clean-docker clean clean-docker-build ## clean _everything_
+clean-all: vagrant-clean clean-docker clean ## clean _everything_
 
 clean: ## Remove all binaries in dist
 	rm -f dist/*
@@ -49,9 +49,9 @@ clean: ## Remove all binaries in dist
 clean-go: ## Clean Go cache
 	go clean -i -r -cache -modcache
 
-.PHONY: clean-docker-build
-clean-docker-build: ## Remove all Docker build images
-	docker image rm synfinatic/udp-proxy-2020-linux:latest 2>/dev/null || true
+.PHONY: clean-docker
+clean-docker: ## Remove all Docker build images
+	docker image rm synfinatic/udp-proxy-2020-amd64:latest 2>/dev/null || true
 	docker image rm synfinatic/udp-proxy-2020-mips64:latest 2>/dev/null || true
 	docker image rm synfinatic/udp-proxy-2020-arm64:latest 2>/dev/null || true
 
@@ -110,47 +110,27 @@ test-tidy:  ## Test to make sure go.mod is tidy
 precheck: test test-fmt test-tidy  ## Run all tests that happen in a PR
 
 ######################################################################
-# Docker targets for testing
-######################################################################
-.PHONY: docker-build
-docker-build: ## Build binary in Docker for testing
-	docker build -t $(DOCKER_REPO)/$(PROJECT_NAME):latest .
-	docker run --rm \
-	    --volume $(shell pwd)/dist:/build/$(PROJECT_NAME)/dist \
-	    $(DOCKER_REPO)/$(PROJECT_NAME):latest
-
-.PHONY: clean-docker
-clean-docker: ## Delete Docker testing image
-	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME):latest 2>/dev/null || true
-
-.PHONY: docker-shell
-docker-shell: ## Get a shell in Docker testing container
-	docker run -it --rm  \
-	    --volume $(shell pwd)/dist:/build/$(PROJECT_NAME)/dist \
-	    $(DOCKER_REPO)/$(PROJECT_NAME):latest /bin/bash
-
-######################################################################
 # Linux targets for building Linux in Docker
 ######################################################################
 LINUX_AMD64_S_NAME       := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-amd64-static
 
 .PHONY: linux-amd64
 linux-amd64: ## Build static Linux/x86_64 binary using Docker
-	docker build -t $(DOCKER_REPO)/$(PROJECT_NAME)-linux-amd64:latest -f Dockerfile.amd64 .
+	docker build -t $(DOCKER_REPO)/$(PROJECT_NAME)-amd64:latest -f Dockerfile.amd64 .
 	docker run --rm \
 	    --volume $(shell pwd)/dist:/build/$(PROJECT_NAME)/dist \
-	    $(DOCKER_REPO)/$(PROJECT_NAME)-linux-amd64:latest
+	    $(DOCKER_REPO)/$(PROJECT_NAME)-amd64:latest
 
 .PHONY: linux-amd64-clean
 linux-amd64-clean: ## Remove Linux/x86_64 Docker image
-	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME)-linux-amd64:latest
-	rm dist/*linux-x86_64-static
+	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME)-amd64:latest
+	rm dist/*linux-amd64-static
 
 .PHONY: linux-amd64-shell
 linux-amd64-shell: ## Get a shell in Linux/x86_64 Docker container
 	docker run -it --rm  \
 	    --volume $(shell pwd)/dist:/build/$(PROJECT_NAME)/dist \
-	    $(DOCKER_REPO)/$(PROJECT_NAME)-linux-amd64:latest /bin/bash
+	    $(DOCKER_REPO)/$(PROJECT_NAME)-amd64:latest /bin/bash
 
 .linux-amd64: $(LINUX_AMD64_S_NAME)
 $(LINUX_AMD64_S_NAME): .prepare
