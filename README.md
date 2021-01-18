@@ -50,11 +50,14 @@ supports Linux for reading & writing to (ethernet?) network interfaces.
 Pretty much any Unix-like system is supported because the dependcy list is only
 `libpcap` and `golang`.  I develop on MacOS and specifically target
 [pfSense](https://www.pfsense.org)/FreeBSD and
-[Ubiquiti](https://www.ui.com) USG/EdgeRouter as those are quite common among
-the Roon user community.
+[Ubiquiti](https://www.ui.com) USG, EdgeRouter and DreamMachine/Pro as those
+are quite common among the Roon user community.
 
 I [release binaries](https://github.com/synfinatic/udp-proxy-2020/releases)
 for Linux/x86_64, Linux/MIPS64, Linux/ARM64, FreeBSD/amd64 and MacOS/x86_64.
+
+There is also a [docker image available](
+https://hub.docker.com/repository/docker/synfinatic/udp-proxy-2020).
 
 ## Building udp-proxy-2020
 
@@ -73,6 +76,7 @@ you:
     via Docker
  * FreeBSD 11.3 on x86_64 `make freebsd` (pfSense 2.4) via
 [Vagrant](https://www.vagrantup.com) & [VirtualBox](https://www.virtualbox.org)
+ * Docker `make docker`
 
 You can get a full list of make targets and basic info about them by running:
 `make help`.
