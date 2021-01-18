@@ -94,6 +94,12 @@ Currently there are only a few flags you probaly need to worry about:
 
 There are other flags of course, run `./udp-proxy-2020 --help` for a full list.
 
+## Installation & Startup Scripts
+
+There are now instructions and startup scripts available in the [startup-scripts](
+startup-scripts) directory.  If you figure out how to add support for another
+platform, please send me a pull request!
+
 ## FAQ
 
 ### So is it a "proxy"?  Are there any proxy config settings I need to configure in my app?
