@@ -35,19 +35,25 @@ $(STR2PCAP_NAME): str2pcap/*.go
 
 include help.mk  # place after ALL target and before all other targets
 
-release: linux-static freebsd mips64-static arm64-static $(OUTPUT_NAME) ## Build our release binaries
+release: linux-amd64 linux-mips64 linux-arm64 $(OUTPUT_NAME) freebsd ## Build our release binaries
 
 .PHONY: run
 run: cmd/*.go  ## build and run udp-proxy-2020 using $UDP_PROXY_2020_ARGS
 	sudo go run cmd/*.go $(UDP_PROXY_2020_ARGS)
 
-clean-all: vagrant-destroy docker-clean clean ## clean _everything_
+clean-all: vagrant-clean clean-docker clean clean-docker-build ## clean _everything_
 
 clean: ## Remove all binaries in dist
 	rm -f dist/*
 
 clean-go: ## Clean Go cache
 	go clean -i -r -cache -modcache
+
+.PHONY: clean-docker-build
+clean-docker-build: ## Remove all Docker build images
+	docker image rm synfinatic/udp-proxy-2020-linux:latest 2>/dev/null || true
+	docker image rm synfinatic/udp-proxy-2020-mips64:latest 2>/dev/null || true
+	docker image rm synfinatic/udp-proxy-2020-arm64:latest 2>/dev/null || true
 
 $(OUTPUT_NAME): cmd/*.go .prepare
 	go build -ldflags='$(LDFLAGS)' -o $(OUTPUT_NAME) cmd/*.go
@@ -113,9 +119,9 @@ docker-build: ## Build binary in Docker for testing
 	    --volume $(shell pwd)/dist:/build/$(PROJECT_NAME)/dist \
 	    $(DOCKER_REPO)/$(PROJECT_NAME):latest
 
-.PHONY: docker-clean
-docker-clean: ## Delete Docker testing image
-	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME):latest
+.PHONY: clean-docker
+clean-docker: ## Delete Docker testing image
+	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME):latest 2>/dev/null || true
 
 .PHONY: docker-shell
 docker-shell: ## Get a shell in Docker testing container
@@ -126,31 +132,31 @@ docker-shell: ## Get a shell in Docker testing container
 ######################################################################
 # Linux targets for building Linux in Docker
 ######################################################################
-LINUX_S_NAME       := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-x86_64-static
+LINUX_AMD64_S_NAME       := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-amd64-static
 
-.PHONY: linux-static
-linux-static: ## Build static Linux/x86_64 binary using Docker
-	docker build -t $(DOCKER_REPO)/$(PROJECT_NAME)-linux:latest -f Dockerfile.linux .
+.PHONY: linux-amd64
+linux-amd64: ## Build static Linux/x86_64 binary using Docker
+	docker build -t $(DOCKER_REPO)/$(PROJECT_NAME)-linux-amd64:latest -f Dockerfile.amd64 .
 	docker run --rm \
 	    --volume $(shell pwd)/dist:/build/$(PROJECT_NAME)/dist \
-	    $(DOCKER_REPO)/$(PROJECT_NAME)-linux:latest
+	    $(DOCKER_REPO)/$(PROJECT_NAME)-linux-amd64:latest
 
-.PHONY: linux-clean
-linux-clean: ## Remove Linux/x86_64 Docker image
-	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME)-linux:latest
+.PHONY: linux-amd64-clean
+linux-amd64-clean: ## Remove Linux/x86_64 Docker image
+	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME)-linux-amd64:latest
 	rm dist/*linux-x86_64-static
 
-.PHONY: linux-shell
-linux-shell: ## Get a shell in Linux/x86_64 Docker container
+.PHONY: linux-amd64-shell
+linux-amd64-shell: ## Get a shell in Linux/x86_64 Docker container
 	docker run -it --rm  \
 	    --volume $(shell pwd)/dist:/build/$(PROJECT_NAME)/dist \
-	    $(DOCKER_REPO)/$(PROJECT_NAME)-linux:latest /bin/bash
+	    $(DOCKER_REPO)/$(PROJECT_NAME)-linux-amd64:latest /bin/bash
 
-.linux-static: $(LINUX_S_NAME)
-$(LINUX_S_NAME): .prepare
+.linux-amd64: $(LINUX_AMD64_S_NAME)
+$(LINUX_AMD64_S_NAME): .prepare
 	LDFLAGS='-l/usr/lib/libpcap.a' CGO_ENABLED=1 \
-	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_S_NAME) cmd/*.go
-	@echo "Created: $(LINUX_S_NAME)"
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_AMD64_S_NAME) cmd/*.go
+	@echo "Created: $(LINUX_AMD64_S_NAME)"
 
 ######################################################################
 # Vagrant targets for building for FreeBSD/pfSense
@@ -171,70 +177,69 @@ freebsd: .vagrant-scp ## Build FreeBSD/pfSense binary using Vagrant VM
 freebsd-shell: ## SSH into FreeBSD Vagrant VM
 	vagrant ssh
 
-freebsd-clean: ## Destroy FreeBSD Vagrant VM
-	vagrant destroy -f
-	rm dist/*freebsd-*
+vagrant-clean: ## Destroy FreeBSD Vagrant VM
+	vagrant destroy -f || true
 
 ######################################################################
 # MIPS64 targets for building for Ubiquiti USG/Edgerouter
 ######################################################################
-MIPS64_S_NAME      := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-mips64-static
+LINUX_MIPS64_S_NAME      := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-mips64-static
 
-.PHONY: mips64-static
-mips64-static: .prepare ## Build Linux/MIPS64 static binary in Docker container
+.PHONY: linux-mips64
+linux-mips64: .prepare ## Build Linux/MIPS64 static binary in Docker container
 	docker build -t $(DOCKER_REPO)/$(PROJECT_NAME)-mips64:latest -f Dockerfile.mips64 .
 	docker run --rm \
 	    --volume $(shell pwd):/build/udp-proxy-2020 \
 	    $(DOCKER_REPO)/$(PROJECT_NAME)-mips64:latest
 
-.PHONY: mips64-shell
-mips64-shell: .prepare ## SSH into Linux/MIPS64 build Docker container
+.PHONY: linux-mips64-shell
+linux-mips64-shell: .prepare ## SSH into Linux/MIPS64 build Docker container
 	docker run -it --rm \
 	    --volume $(shell pwd):/build/udp-proxy-2020 \
 	    --entrypoint /bin/bash \
 	    $(DOCKER_REPO)/$(PROJECT_NAME)-mips64:latest
 
-.mips64-static: $(MIPS64_S_NAME)
-$(MIPS64_S_NAME): .prepare
+.linux-mips64: $(LINUX_MIPS64_S_NAME)
+$(LINUX_MIPS64_S_NAME): .prepare
 	LDFLAGS='-l/usr/mips64-linux-gnuabi64/lib/libpcap.a' \
 	    GOOS=linux GOARCH=mips64 CGO_ENABLED=1 CC=mips64-linux-gnuabi64-gcc \
 	    PKG_CONFIG_PATH=/usr/mips64-linux-gnuabi64/lib/pkgconfig \
-	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(MIPS64_S_NAME) cmd/*.go
-	@echo "Created: $(MIPS64_S_NAME)"
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_MIPS64_S_NAME) cmd/*.go
+	@echo "Created: $(LINUX_MIPS64_S_NAME)"
 
-.PHONY: mips64-clean
-mips64-clean: ## Remove Linux/MIPS64 Docker image
+.PHONY: linux-mips64-clean
+linux-mips64-clean: ## Remove Linux/MIPS64 Docker image
 	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME)-mips64:latest
 	rm dist/*linux-mips64
 
 ######################################################################
 # ARM64 targets for building for Linux/ARM64 RaspberryPi/etc
 ######################################################################
-ARM64_S_NAME      := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-arm64-static
+LINUX_ARM64_S_NAME      := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-arm64-static
 
-.PHONY: arm64-static
-arm64-static: .prepare ## Build Linux/arm64 static binary in Docker container
+.PHONY: linux-arm64
+linux-arm64: .prepare ## Build Linux/arm64 static binary in Docker container
 	docker build -t $(DOCKER_REPO)/$(PROJECT_NAME)-arm64:latest -f Dockerfile.arm64 .
 	docker run --rm \
 	    --volume $(shell pwd):/build/udp-proxy-2020 \
 	    $(DOCKER_REPO)/$(PROJECT_NAME)-arm64:latest
 
-.PHONY: arm64-shell
-arm64-shell: .prepare ## SSH into Linux/arm64 build Docker container
+.PHONY: linux-arm64-shell
+linux-arm64-shell: .prepare ## SSH into Linux/arm64 build Docker container
 	docker run -it --rm \
 	    --volume $(shell pwd):/build/udp-proxy-2020 \
 	    --entrypoint /bin/bash \
 	    $(DOCKER_REPO)/$(PROJECT_NAME)-arm64:latest
 
-.arm64-static: $(ARM64_S_NAME)
-$(ARM64_S_NAME): .prepare
+.linux-arm64: $(LINUX_ARM64_S_NAME)
+$(LINUX_ARM64_S_NAME): .prepare
 	LDFLAGS='-l/usr/aarch64-linux-gnu/lib/libpcap.a' \
 	    GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc-10 \
 	    PKG_CONFIG_PATH=/usr/aarch64-linux-gnu/lib/pkgconfig \
-	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(ARM64_S_NAME) cmd/*.go
-	@echo "Created: $(arm64_S_NAME)"
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_ARM64_S_NAME) cmd/*.go
+	@echo "Created: $(LINUX_ARM64_S_NAME)"
 
-.PHONY: arm64-clean
-arm64-clean: ## Remove Linux/arm64 Docker image
+.PHONY: linux-arm64-clean
+linux-arm64-clean: ## Remove Linux/arm64 Docker image
 	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME)-arm64:latest
 	rm dist/*linux-arm64

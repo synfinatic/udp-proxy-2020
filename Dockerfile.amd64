@@ -7,4 +7,4 @@ RUN mkdir -p /build
 WORKDIR /build
 COPY . /build/$PROJECT/
 WORKDIR /build/$PROJECT 
-ENTRYPOINT PATH=/usr/lib/go-1.14/bin:$PATH make .linux-static
+ENTRYPOINT PATH=/usr/lib/go-1.14/bin:$PATH make .linux-amd64

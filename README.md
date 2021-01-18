@@ -54,7 +54,7 @@ Pretty much any Unix-like system is supported because the dependcy list is only
 the Roon user community.
 
 I [release binaries](https://github.com/synfinatic/udp-proxy-2020/releases)
-for Linux/x86_64, Linux/MIPS64, FreeBSD/amd64 and MacOS/x86_64.
+for Linux/x86_64, Linux/MIPS64, Linux/ARM64, FreeBSD/amd64 and MacOS/x86_64.
 
 ## Building udp-proxy-2020
 
@@ -66,9 +66,11 @@ appropriate (we need GNU Make, not BSD Make).
 If you need to build cross platform, then one of the following targets may help
 you:
 
- * Linux on x86_64 `make linux-static` via [Docker](https://www.docker.com)
- * Linux on MIPS64 `make mips64-static` (Linux/MIPS64 big-endian for Ubiquiti
-USG/EdgeRouter) via Docker
+ * Linux on x86_64 `make linux-amd64` via [Docker](https://www.docker.com)
+ * Linux on MIPS64 `make linux-mips64` (Linux/MIPS64 big-endian for Ubiquiti
+    USG/EdgeRouter) via Docker
+ * Linux on ARM64 `make linux-arm64` (Linux/ARM64 for Ubiquiti UDM/UDM Pro)
+    via Docker
  * FreeBSD 11.3 on x86_64 `make freebsd` (pfSense 2.4) via
 [Vagrant](https://www.vagrantup.com) & [VirtualBox](https://www.virtualbox.org)
 
