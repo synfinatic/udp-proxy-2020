@@ -90,13 +90,35 @@ optionally grant the `CAP_NET_RAW` capability.
 
 Currently there are only a few flags you probaly need to worry about:
 
- * `--interface` -- specify two or more network interfaces to listen on
- * `--port` -- specify one or more UDP ports to monitor
- * `--debug` -- enable debugging output
- * `--fixed-ip` -- Hardcode an <interface>@<ipaddr> to always send traffic to.  Useful
-	for things like OpenVPN in site-to-site mode.
+ * `--interface` -- Specify two or more network interfaces to listen on.
+ * `--port` -- Specify one or more UDP ports to monitor.
+ * `--debug` -- Enable debugging output.
 
-There are other flags of course, run `./udp-proxy-2020 --help` for a full list.
+Advanced options:
+
+ * `--fixed-ip` -- Hardcode an <interface>@<ipaddr> to always send traffic to.
+    Useful for things like OpenVPN in site-to-site mode.
+ * `--timeout` -- Number of ms for pcap timeout value. (default is 250ms)
+ * `--cachettl` -- Number of seconds to cache IPs for. (default is 90sec)
+    This value may need to be increased if you have problems passing traffic to
+    clients on OpenVPN tunnels if you can't use `--fixed-ip` because clients
+    don't have a fixed ip.
+
+There may be other flags of course, run `./udp-proxy-2020 --help` for a full list.
+
+Example:
+
+```sh
+udp-proxy-2020 --port 9003 --interface eth0,eth0.100,eth1,tun0 --cachettl 300
+```
+
+Would forward udp/9003 packets on four interfaces: eth0, eth1, VLAN100 on eth0 and tun0.
+Client IP's on tun0 would be remembered for 5minutes once they are learned.
+
+Note: "learning" requires the client to send a udp/9003 message first!  If
+your application requires a message to be sent *to* the client first, then you
+would need to specify `--fixed-ip=1.2.3.4@tun0` where `1.2.3.4` is the IP address
+of the client on tun0.
 
 ## Installation & Startup Scripts
 
