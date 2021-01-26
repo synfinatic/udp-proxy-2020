@@ -150,3 +150,15 @@ that came to my mind.
 So I haven't done this myself, but Bart Verhoeven over on the Roon Community
 forums wrote up
 [this really detailed how to](https://community.roonlabs.com/t/how-to-roon-mobile-over-wireguard-on-a-unifi-usg/124477).
+
+### What binary is right for me?
+
+udp-proxy-2020 is built for multiple OS and hardware platforms:
+
+ * MacOS/Intel x86_64: darwin-x86_64
+ * Linux/Intel x86_64: linux-amd64
+ * Linux/ARM64: linux-arm64
+ * Linux/ARM32EL: linux-arm32
+ * Linux/ARM32HF (hardware floating point): linux-arm32hf
+ * Linux/MIPS64: linux-mips64
+ * FreeBSD/Intel x86_64:: freebsd-amd64

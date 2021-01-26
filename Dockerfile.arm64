@@ -17,10 +17,10 @@ RUN apt-get install -y \
     libc6-dev-arm64-cross
 
 # don't actually use this... now
-RUN mkdir -p /build/bin && cd /build/bin \
-    ln -s /usr/bin/aarch64-linux-gnu-gccgo-10 gccgo \
-    ln -s /usr/bin/aarch64-linux-gnu-gcc-ar-10 ar \
-    ln -s /usr/bin/aranlibch64-linux-gnu-gcc-ranlib-10 ranlib \
+RUN mkdir -p /build/bin && cd /build/bin && \
+    ln -s /usr/bin/aarch64-linux-gnu-gccgo-10 gccgo && \
+    ln -s /usr/bin/aarch64-linux-gnu-gcc-ar-10 ar && \
+    ln -s /usr/bin/aarch64-linux-gnu-gcc-ranlib-10 ranlib && \
     ln -s /usr/bin/aarch64-linux-gnu-gcc-10 gcc
 
 # build libpcap
@@ -29,7 +29,7 @@ ENV LIBPCAP_VERSION=1.9.1
 WORKDIR /build
 RUN wget -qO - https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz | tar zxf - && \
     cd libpcap-${LIBPCAP_VERSION} && \
-    CC=aarch64-linux-gnu-gcc-10 BUILD_CC=gcc AR=aarch64-linux-gnu-gcc-ar-10  RANLIB=aarch64-linux-gnu-gcc-ranlib-10 \
+    CC=/build/bin/gcc BUILD_CC=gcc AR=/build/bin/ar  RANLIB=/build/bin/ranlib \
         ./configure --build i686-pc-linux-gnu --host aarch64-linux-gnu --prefix=/usr/aarch64-linux-gnu && make install
 
 # build our app
