@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+Added:
+
+ - arm32el binary as part of official release
+ - arm32hf binary as part of official release
+
 Fixed:
 
  - Small tweaks to docs & makefile targets
