@@ -35,7 +35,7 @@ $(STR2PCAP_NAME): str2pcap/*.go
 
 include help.mk  # place after ALL target and before all other targets
 
-release: linux-amd64 linux-mips64 linux-arm64 $(OUTPUT_NAME) freebsd docker ## Build our release binaries
+release: linux-amd64 linux-mips64 linux-arm64 linux-arm32 linux-arm32hf $(OUTPUT_NAME) freebsd docker ## Build our release binaries
 
 .PHONY: run
 run: cmd/*.go  ## build and run udp-proxy-2020 using $UDP_PROXY_2020_ARGS
@@ -193,7 +193,7 @@ linux-mips64-clean: ## Remove Linux/MIPS64 Docker image
 	rm dist/*linux-mips64
 
 ######################################################################
-# ARM64 targets for building for Linux/ARM64 RaspberryPi/etc
+# ARM64 targets for building for Linux/ARM64 aarch64
 ######################################################################
 LINUX_ARM64_S_NAME      := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-arm64-static
 
@@ -224,6 +224,73 @@ linux-arm64-clean: ## Remove Linux/arm64 Docker image
 	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME)-arm64:latest
 	rm dist/*linux-arm64
 
+######################################################################
+# ARM64 targets for building for Linux/ARM32 no hardware floating point
+######################################################################
+LINUX_ARM32_S_NAME      := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-arm32-static
+
+.PHONY: linux-arm32
+linux-arm32: .prepare ## Build Linux/arm32 static binary in Docker container
+	docker build -t $(DOCKER_REPO)/$(PROJECT_NAME)-arm32:latest -f Dockerfile.arm32 .
+	docker run --rm \
+	    --volume $(shell pwd):/build/udp-proxy-2020 \
+	    $(DOCKER_REPO)/$(PROJECT_NAME)-arm32:latest
+
+.PHONY: linux-arm32-shell
+linux-arm32-shell: .prepare ## SSH into Linux/arm32 build Docker container
+	docker run -it --rm \
+	    --volume $(shell pwd):/build/udp-proxy-2020 \
+	    --entrypoint /bin/bash \
+	    $(DOCKER_REPO)/$(PROJECT_NAME)-arm32:latest
+
+.linux-arm32: $(LINUX_ARM32_S_NAME)
+$(LINUX_ARM32_S_NAME): .prepare
+	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
+	    GOOS=linux GOARCH=arm CGO_ENABLED=1 CC=arm-linux-gnueabi-gcc-10 \
+	    PKG_CONFIG_PATH=/usr/arm-linux-gnueabi/lib/pkgconfig \
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_ARM32_S_NAME) cmd/*.go
+	@echo "Created: $(LINUX_ARM32_S_NAME)"
+
+.PHONY: linux-arm32-clean
+linux-arm32-clean: ## Remove Linux/arm32 Docker image
+	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME)-arm32:latest
+	rm dist/*linux-arm32
+
+######################################################################
+# ARM64 targets for building for Linux/ARM32 with hardware floating point
+######################################################################
+LINUX_ARM32HF_S_NAME      := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-arm32hf-static
+
+.PHONY: linux-arm32hf
+linux-arm32hf: .prepare ## Build Linux/arm32 static binary in Docker container
+	docker build -t $(DOCKER_REPO)/$(PROJECT_NAME)-arm32hf:latest -f Dockerfile.arm32hf .
+	docker run --rm \
+	    --volume $(shell pwd):/build/udp-proxy-2020 \
+	    $(DOCKER_REPO)/$(PROJECT_NAME)-arm32hf:latest
+
+.PHONY: linux-arm32hf-shell
+linux-arm32hf-shell: .prepare ## SSH into Linux/arm32 build Docker container
+	docker run -it --rm \
+	    --volume $(shell pwd):/build/udp-proxy-2020 \
+	    --entrypoint /bin/bash \
+	    $(DOCKER_REPO)/$(PROJECT_NAME)-arm32hf:latest
+
+.linux-arm32hf: $(LINUX_ARM32HF_S_NAME)
+$(LINUX_ARM32HF_S_NAME): .prepare
+	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
+	    GOOS=linux GOARCH=arm CGO_ENABLED=1 CC=arm-linux-gnueabihf-gcc-10 \
+	    PKG_CONFIG_PATH=/usr/arm-linux-gnueabihf/lib/pkgconfig \
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_ARM32HF_S_NAME) cmd/*.go
+	@echo "Created: $(LINUX_ARM32HF_S_NAME)"
+
+.PHONY: linux-arm32hf-clean
+linux-arm32hf-clean: ## Remove Linux/arm32hf Docker image
+	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME)-arm32hf:latest
+	rm dist/*linux-arm32hf
+
+######################################################################
+# Docker image for running in docker container for UDM Pro/etc
+######################################################################
 
 DOCKER_VERSION ?= v$(PROJECT_VERSION)
 .PHONY: docker
