@@ -1,0 +1,20 @@
+[Unit]
+Description=UDP Proxy 20202
+Documentation=https://github.com/synfinatic/udp-proxy-2020
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+EnvironmentFile=/etc/udp-proxy-2020.conf
+User=root
+Group=root
+Type=simple
+Restart=on-failure
+ExecStart=/usr/local/bin/udp-proxy-2020 ${ARGS}
+
+LimitNOFILE=10000
+TimeoutStopSec=20
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

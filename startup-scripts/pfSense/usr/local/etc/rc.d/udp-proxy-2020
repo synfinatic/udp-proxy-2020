@@ -13,7 +13,7 @@
 . /etc/rc.subr
 . /usr/local/etc/udp-proxy-2020.conf
 
-name=udp-proxy-2020
+name=udp_proxy_2020
 rcvar=udp_proxy_2020_enable
 pidfile=/var/run/udp-proxy-2020.pid
 
@@ -22,25 +22,32 @@ start_cmd="${name}_start"
 stop_cmd="${name}_stop"
 status_cmd="${name}_status"
 cleanup_cmd="${name}_cleanup"
+status_cmd="${name}_status"
 
 load_rc_config ${name}
 : ${udp_proxy_2020_enable:=no}
 
 
-udp-proxy-2020_start() {
+udp_proxy_2020_start() {
     /usr/sbin/daemon -cf -p ${pidfile} /usr/local/bin/udp-proxy-2020 ${udp_vars}
 }
 
-udp-proxy-2020_stop() {
+udp_proxy_2020_stop() {
     [ -f ${pidfile} ] && kill `cat ${pidfile}` || echo "Unable to kill ${name}.  Missing pid file?"
 }
 
-udp-proxy-2020_cleanup() {
+udp_proxy_2020_cleanup() {
     [ -f ${pidfile} ] && rm ${pidfile}
 }
 
-udp-proxy-2020_status() {
-    [ ! -n "`pgrep -F $(pidfile)`" ]
+udp_proxy_2020_status() {
+    if [ ! -f ${pidfile} ]; then
+        echo "udp-proxy-2020 is not running."
+    elif [ -n "$(pgrep -F ${pidfile} udp-proxy-2020)" ] ; then
+        echo "udp-proxy-2020 is running ($(cat ${pidfile}))"
+    else
+        echo "udp-proxy-2020 is not running but left stale pidfile."
+    fi
 }
 
 run_rc_command "$1"

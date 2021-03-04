@@ -6,10 +6,12 @@ Added:
 
  - arm32el binary as part of official release
  - arm32hf binary as part of official release
+ - systemd startup script & docs
 
 Fixed:
 
  - Small tweaks to docs & makefile targets
+ - pfSense/FreeBSD rc.d scripts now support FreeBSD 12.x/pfSense 2.5.0
 
 ## v0.0.6 - 2021-01-18
 
