@@ -24,7 +24,7 @@ jobs:
     - name: Install deps
       run: sudo apt-get update && sudo apt-get install -y libpcap0.8 libpcap0.8-dev
 
-    - name: Build
+    - name: Build Linux Only
       run: make
 
     - name: Run tests
