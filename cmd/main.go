@@ -16,6 +16,7 @@ var Version = "unknown"
 var Buildinfos = "unknown"
 var Tag = "NO-TAG"
 var CommitID = "unknown"
+var Delta = ""
 
 func main() {
 	var _fixed_ip = []string{}
@@ -51,8 +52,13 @@ func main() {
 	}
 
 	if version == true {
-		fmt.Printf("udp-proxy-2020 Version %s -- Copyright 2020 Aaron Turner\n", Version)
-		fmt.Printf("%s (%s) built at %s\n", CommitID, Tag, Buildinfos)
+		delta := ""
+		if len(Delta) > 0 {
+			delta = fmt.Sprintf(" [%s delta]", Delta)
+			Tag = "Unknown"
+		}
+		fmt.Printf("udp-proxy-2020 Version %s -- Copyright 2020-2021 Aaron Turner\n", Version)
+		fmt.Printf("%s (%s)%s built at %s\n", CommitID, Tag, delta, Buildinfos)
 		os.Exit(0)
 	}
 

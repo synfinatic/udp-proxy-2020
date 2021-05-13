@@ -15,13 +15,14 @@ PROJECT_COMMIT     := $(shell git rev-parse HEAD)
 ifeq ($(PROJECT_COMMIT),)
 PROJECT_COMMIT     := NO-CommitID
 endif
+PROJECT_DELTA      := $(shell DELTA_LINES=$$(git diff | wc -l); if [ $${DELTA_LINES} -ne 0 ]; then echo $${DELTA_LINES} ; else echo "''" ; fi)
 VERSION_PKG        := $(shell echo $(PROJECT_VERSION) | sed 's/^v//g')
 LICENSE            := GPLv3
 URL                := https://github.com/$(DOCKER_REPO)/$(PROJECT_NAME)
 DESCRIPTION        := UDP Proxy 2020: A bad hack for a stupid problem
 BUILDINFOS         := $(shell date +%FT%T%z)$(BUILDINFOSDET)
 HOSTNAME           := $(shell hostname)
-LDFLAGS            := -X "main.Version=$(PROJECT_VERSION)" -X "main.Buildinfos=$(BUILDINFOS)" -X "main.Tag=$(PROJECT_TAG)" -X "main.CommitID=$(PROJECT_COMMIT)"
+LDFLAGS            := -X "main.Version=$(PROJECT_VERSION)" -X "main.Delta=$(PROJECT_DELTA)" -X "main.Buildinfos=$(BUILDINFOS)" -X "main.Tag=$(PROJECT_TAG)" -X "main.CommitID=$(PROJECT_COMMIT)"
 OUTPUT_NAME        := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-$(GOOS)-$(GOARCH)
 STR2PCAP_NAME      := $(DIST_DIR)str2pcap-$(PROJECT_VERSION)-$(GOOS)-$(GOARCH)
 
@@ -35,7 +36,10 @@ $(STR2PCAP_NAME): str2pcap/*.go
 
 include help.mk  # place after ALL target and before all other targets
 
-release: linux-amd64 linux-mips64 linux-arm64 linux-arm32 linux-arm32hf $(OUTPUT_NAME) freebsd docker ## Build our release binaries
+release: build-release
+	cd dist && shasum -a 256 * | gpg --clear-sign >release.sig
+
+build-release: clean linux-amd64 linux-mips64 linux-arm64 linux-arm32 linux-arm32hf $(OUTPUT_NAME) freebsd docker ## Build our release binaries
 
 .PHONY: run
 run: cmd/*.go  ## build and run udp-proxy-2020 using $UDP_PROXY_2020_ARGS
