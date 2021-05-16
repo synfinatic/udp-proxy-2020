@@ -8,6 +8,7 @@ Added:
  - arm32hf binary as part of official release
  - systemd startup script & docs
  - Start signing releases
+ - Add UDM Utilities startup scripts
 
 Fixed:
 
