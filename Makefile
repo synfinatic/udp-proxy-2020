@@ -4,7 +4,7 @@ GOARCH ?= $(shell uname -m)
 BUILDINFOSDET ?=
 UDP_PROXY_2020_ARGS ?=
 
-PROJECT_VERSION    := 0.0.6
+PROJECT_VERSION    := 0.0.7
 DOCKER_REPO        := synfinatic
 PROJECT_NAME       := udp-proxy-2020
 PROJECT_TAG        := $(shell git describe --tags 2>/dev/null $(git rev-list --tags --max-count=1))
@@ -298,9 +298,11 @@ linux-arm32hf-clean: ## Remove Linux/arm32hf Docker image
 
 DOCKER_VERSION ?= v$(PROJECT_VERSION)
 .PHONY: docker
-docker:  ## Build docker image
-	docker build -t $(DOCKER_REPO)/$(PROJECT_NAME):$(DOCKER_VERSION) \
+docker:  ## Build docker image for AMD64 & ARM64
+	docker buildx build \
+	    -t $(DOCKER_REPO)/$(PROJECT_NAME):$(DOCKER_VERSION) \
 	    --build-arg VERSION=$(DOCKER_VERSION) \
+	    --platform linux/arm64,linux/amd64 \
 	    -f Dockerfile .
 
 .docker:
@@ -313,6 +315,9 @@ docker-shell:  ## Get a shell in the docker image
 	    /bin/sh
 
 docker-release: docker  ## Tag latest and push docker images
-	docker push $(DOCKER_REPO)/$(PROJECT_NAME):$(DOCKER_VERSION)
-	docker tag $(DOCKER_REPO)/$(PROJECT_NAME):$(DOCKER_VERSION) $(DOCKER_REPO)/$(PROJECT_NAME):latest
-	docker push $(DOCKER_REPO)/$(PROJECT_NAME):latest
+	docker buildx build \
+	    -t $(DOCKER_REPO)/$(PROJECT_NAME):$(DOCKER_VERSION) \
+	    -t $(DOCKER_REPO)/$(PROJECT_NAME):latest \
+	    --build-arg VERSION=$(DOCKER_VERSION) \
+	    --platform linux/arm64,linux/amd64 \
+	    --push -f Dockerfile .

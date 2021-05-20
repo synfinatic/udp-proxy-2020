@@ -1,6 +1,6 @@
 # udp-proxy-2020 Changelog
 
-## Unreleased
+## v0.0.7 - 2021-05-19
 
 Added:
 
@@ -9,6 +9,8 @@ Added:
  - systemd startup script & docs
  - Start signing releases
  - Add UDM Utilities startup scripts
+ - Build ARM64 Docker container for UDM
+ - Update Alpine/Go for Docker
 
 Fixed:
 
