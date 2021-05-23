@@ -37,7 +37,7 @@ $(STR2PCAP_NAME): str2pcap/*.go
 include help.mk  # place after ALL target and before all other targets
 
 release: build-release
-	cd dist && shasum -a 256 * | gpg --clear-sign >release.sig
+	cd dist && shasum -a 256 udp-proxy-2020* | gpg --clear-sign >release.sig
 
 build-release: clean linux-amd64 linux-mips64 linux-arm64 linux-arm32 linux-arm32hf $(OUTPUT_NAME) freebsd docker ## Build our release binaries
 
