@@ -25,6 +25,7 @@ func main() {
 	var timeout int64
 	var cachettl int64
 	var debug bool
+	var logfile string
 	var version bool
 	var ilist bool
 	var fixed_ip = map[string][]string{}
@@ -36,6 +37,7 @@ func main() {
 	flag.Int64Var(&timeout, "timeout", 250, "Timeout in ms")
 	flag.Int64Var(&cachettl, "cachettl", 90, "Client IP cache TTL in sec")
 	flag.BoolVar(&debug, "debug", false, "Enable debugging")
+	flag.StringVar(&logfile, "logfile", "stderr", "Log to file instead of stderr")
 	flag.BoolVar(&ilist, "list-interfaces", false, "List available interfaces and exit")
 	flag.BoolVar(&version, "version", false, "Print version and exit")
 
@@ -49,6 +51,16 @@ func main() {
 		log.SetLevel(log.DebugLevel)
 	} else {
 		log.SetLevel(log.WarnLevel)
+	}
+
+	if logfile == "stderr" {
+		log.SetOutput(os.Stderr)
+	} else {
+		file, err := os.OpenFile(logfile, os.O_APPEND|os.O_CREATE, 0644)
+		if err != nil {
+			log.WithError(err).Fatalf("Unable to open log file: %s", logfile)
+		}
+		log.SetOutput(file)
 	}
 
 	if version == true {
