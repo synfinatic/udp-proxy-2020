@@ -4,7 +4,7 @@ GOARCH ?= $(shell uname -m)
 BUILDINFOSDET ?=
 UDP_PROXY_2020_ARGS ?=
 
-PROJECT_VERSION    := 0.0.6
+PROJECT_VERSION    := 0.0.7
 DOCKER_REPO        := synfinatic
 PROJECT_NAME       := udp-proxy-2020
 PROJECT_TAG        := $(shell git describe --tags 2>/dev/null $(git rev-list --tags --max-count=1))
@@ -25,7 +25,7 @@ HOSTNAME           := $(shell hostname)
 LDFLAGS            := -X "main.Version=$(PROJECT_VERSION)" -X "main.Delta=$(PROJECT_DELTA)" -X "main.Buildinfos=$(BUILDINFOS)" -X "main.Tag=$(PROJECT_TAG)" -X "main.CommitID=$(PROJECT_COMMIT)"
 OUTPUT_NAME        := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-$(GOOS)-$(GOARCH)
 STR2PCAP_NAME      := $(DIST_DIR)str2pcap-$(PROJECT_VERSION)-$(GOOS)-$(GOARCH)
-
+DOCKER_VERSION     ?= v$(PROJECT_VERSION)
 
 ALL: $(OUTPUT_NAME) str2pcap ## Build binary
 
@@ -116,25 +116,26 @@ precheck: test test-fmt test-tidy  ## Run all tests that happen in a PR
 ######################################################################
 # Linux targets for building Linux in Docker
 ######################################################################
-LINUX_AMD64_S_NAME       := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-amd64-static
+LINUX_AMD64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-amd64-static
+AMD64_IMAGE 	   := $(DOCKER_REPO)/$(PROJECT_NAME)-builder-amd64:$(DOCKER_VERSION)
 
 .PHONY: linux-amd64
 linux-amd64: ## Build static Linux/x86_64 binary using Docker
-	docker build -t $(DOCKER_REPO)/$(PROJECT_NAME)-amd64:latest -f Dockerfile.amd64 .
+	docker build -t $(AMD64_IMAGE) -f Dockerfile.amd64 .
 	docker run --rm \
 	    --volume $(shell pwd)/dist:/build/$(PROJECT_NAME)/dist \
-	    $(DOCKER_REPO)/$(PROJECT_NAME)-amd64:latest
+	    $(AMD64_IMAGE)
 
 .PHONY: linux-amd64-clean
 linux-amd64-clean: ## Remove Linux/x86_64 Docker image
-	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME)-amd64:latest
+	docker image rm $(AMD64_IMAGE)
 	rm dist/*linux-amd64-static
 
 .PHONY: linux-amd64-shell
 linux-amd64-shell: ## Get a shell in Linux/x86_64 Docker container
 	docker run -it --rm  \
 	    --volume $(shell pwd)/dist:/build/$(PROJECT_NAME)/dist \
-	    $(DOCKER_REPO)/$(PROJECT_NAME)-amd64:latest /bin/bash
+	    $(AMD64_IMAGE) /bin/bash
 
 .linux-amd64: $(LINUX_AMD64_S_NAME)
 $(LINUX_AMD64_S_NAME): .prepare
@@ -167,21 +168,21 @@ vagrant-clean: ## Destroy FreeBSD Vagrant VM
 ######################################################################
 # MIPS64 targets for building for Ubiquiti USG/Edgerouter
 ######################################################################
-LINUX_MIPS64_S_NAME      := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-mips64-static
+LINUX_MIPS64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-mips64-static
+MIPS64_IMAGE 	    := $(DOCKER_REPO)/$(PROJECT_NAME)-builder-mips64:$(DOCKER_VERSION)
 
 .PHONY: linux-mips64
 linux-mips64: .prepare ## Build Linux/MIPS64 static binary in Docker container
-	docker build -t $(DOCKER_REPO)/$(PROJECT_NAME)-mips64:latest -f Dockerfile.mips64 .
+	docker build -t $(MIPS64_IMAGE) -f Dockerfile.mips64 .
 	docker run --rm \
 	    --volume $(shell pwd):/build/udp-proxy-2020 \
-	    $(DOCKER_REPO)/$(PROJECT_NAME)-mips64:latest
+	    $(MIPS64_IMAGE)
 
 .PHONY: linux-mips64-shell
 linux-mips64-shell: .prepare ## SSH into Linux/MIPS64 build Docker container
 	docker run -it --rm \
 	    --volume $(shell pwd):/build/udp-proxy-2020 \
-	    --entrypoint /bin/bash \
-	    $(DOCKER_REPO)/$(PROJECT_NAME)-mips64:latest
+	    --entrypoint /bin/bash $(MIPS64_IMAGE)
 
 .linux-mips64: $(LINUX_MIPS64_S_NAME)
 $(LINUX_MIPS64_S_NAME): .prepare
@@ -193,27 +194,28 @@ $(LINUX_MIPS64_S_NAME): .prepare
 
 .PHONY: linux-mips64-clean
 linux-mips64-clean: ## Remove Linux/MIPS64 Docker image
-	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME)-mips64:latest
+	docker image rm $(MIPS64_IMAGE)
 	rm dist/*linux-mips64
 
 ######################################################################
 # ARM64 targets for building for Linux/ARM64 aarch64
 ######################################################################
-LINUX_ARM64_S_NAME      := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-arm64-static
+LINUX_ARM64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-arm64-static
+ARM64_IMAGE 	   := $(DOCKER_REPO)/$(PROJECT_NAME)-builder-arm64:$(DOCKER_VERSION)
 
 .PHONY: linux-arm64
 linux-arm64: .prepare ## Build Linux/arm64 static binary in Docker container
-	docker build -t $(DOCKER_REPO)/$(PROJECT_NAME)-arm64:latest -f Dockerfile.arm64 .
+	docker build -t $(ARM64_IMAGE) -f Dockerfile.arm64 .
 	docker run --rm \
 	    --volume $(shell pwd):/build/udp-proxy-2020 \
-	    $(DOCKER_REPO)/$(PROJECT_NAME)-arm64:latest
+	    $(ARM64_IMAGE)
 
 .PHONY: linux-arm64-shell
 linux-arm64-shell: .prepare ## SSH into Linux/arm64 build Docker container
 	docker run -it --rm \
 	    --volume $(shell pwd):/build/udp-proxy-2020 \
 	    --entrypoint /bin/bash \
-	    $(DOCKER_REPO)/$(PROJECT_NAME)-arm64:latest
+	    $(ARM64_IMAGE)
 
 .linux-arm64: $(LINUX_ARM64_S_NAME)
 $(LINUX_ARM64_S_NAME): .prepare
@@ -225,27 +227,27 @@ $(LINUX_ARM64_S_NAME): .prepare
 
 .PHONY: linux-arm64-clean
 linux-arm64-clean: ## Remove Linux/arm64 Docker image
-	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME)-arm64:latest
+	docker image rm $(ARM64_IMAGE)
 	rm dist/*linux-arm64
 
 ######################################################################
 # ARM64 targets for building for Linux/ARM32 no hardware floating point
 ######################################################################
-LINUX_ARM32_S_NAME      := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-arm32-static
+LINUX_ARM32_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-arm32-static
+ARM32_IMAGE 	   := $(DOCKER_REPO)/$(PROJECT_NAME)-builder-arm32:$(DOCKER_VERSION)
 
 .PHONY: linux-arm32
 linux-arm32: .prepare ## Build Linux/arm32 static binary in Docker container
-	docker build -t $(DOCKER_REPO)/$(PROJECT_NAME)-arm32:latest -f Dockerfile.arm32 .
+	docker build -t $(ARM32_IMAGE) -f Dockerfile.arm32 .
 	docker run --rm \
 	    --volume $(shell pwd):/build/udp-proxy-2020 \
-	    $(DOCKER_REPO)/$(PROJECT_NAME)-arm32:latest
+	    $(ARM32_IMAGE)
 
 .PHONY: linux-arm32-shell
 linux-arm32-shell: .prepare ## SSH into Linux/arm32 build Docker container
 	docker run -it --rm \
 	    --volume $(shell pwd):/build/udp-proxy-2020 \
-	    --entrypoint /bin/bash \
-	    $(DOCKER_REPO)/$(PROJECT_NAME)-arm32:latest
+	    --entrypoint /bin/bash $(ARM32_IMAGE)
 
 .linux-arm32: $(LINUX_ARM32_S_NAME)
 $(LINUX_ARM32_S_NAME): .prepare
@@ -257,27 +259,27 @@ $(LINUX_ARM32_S_NAME): .prepare
 
 .PHONY: linux-arm32-clean
 linux-arm32-clean: ## Remove Linux/arm32 Docker image
-	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME)-arm32:latest
+	docker image rm $(ARM32_IMAGE)
 	rm dist/*linux-arm32
 
 ######################################################################
 # ARM64 targets for building for Linux/ARM32 with hardware floating point
 ######################################################################
-LINUX_ARM32HF_S_NAME      := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-arm32hf-static
+LINUX_ARM32HF_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-arm32hf-static
+ARM32HF_IMAGE 	     := $(DOCKER_REPO)/$(PROJECT_NAME)-builder-arm32hf:$(DOCKER_VERSION)
 
 .PHONY: linux-arm32hf
 linux-arm32hf: .prepare ## Build Linux/arm32 static binary in Docker container
-	docker build -t $(DOCKER_REPO)/$(PROJECT_NAME)-arm32hf:latest -f Dockerfile.arm32hf .
+	docker build -t $(ARM32HF_IMAGE) -f Dockerfile.arm32hf .
 	docker run --rm \
 	    --volume $(shell pwd):/build/udp-proxy-2020 \
-	    $(DOCKER_REPO)/$(PROJECT_NAME)-arm32hf:latest
+	    $(ARM32HF_IMAGE)
 
 .PHONY: linux-arm32hf-shell
 linux-arm32hf-shell: .prepare ## SSH into Linux/arm32 build Docker container
 	docker run -it --rm \
 	    --volume $(shell pwd):/build/udp-proxy-2020 \
-	    --entrypoint /bin/bash \
-	    $(DOCKER_REPO)/$(PROJECT_NAME)-arm32hf:latest
+	    --entrypoint /bin/bash $(ARM32HF_IMAGE)
 
 .linux-arm32hf: $(LINUX_ARM32HF_S_NAME)
 $(LINUX_ARM32HF_S_NAME): .prepare
@@ -289,17 +291,17 @@ $(LINUX_ARM32HF_S_NAME): .prepare
 
 .PHONY: linux-arm32hf-clean
 linux-arm32hf-clean: ## Remove Linux/arm32hf Docker image
-	docker image rm $(DOCKER_REPO)/$(PROJECT_NAME)-arm32hf:latest
+	docker image rm $(ARM32HF_IMAGE)
 	rm dist/*linux-arm32hf
 
 ######################################################################
 # Docker image for running in docker container for UDM Pro/etc
 ######################################################################
 
-DOCKER_VERSION ?= v$(PROJECT_VERSION)
 .PHONY: docker
-docker:  ## Build docker image
-	docker build -t $(DOCKER_REPO)/$(PROJECT_NAME):$(DOCKER_VERSION) \
+docker:  ## Build docker image for AMD64 for testing?
+	docker build \
+	    -t $(DOCKER_REPO)/$(PROJECT_NAME):$(DOCKER_VERSION) \
 	    --build-arg VERSION=$(DOCKER_VERSION) \
 	    -f Dockerfile .
 
@@ -313,6 +315,12 @@ docker-shell:  ## Get a shell in the docker image
 	    /bin/sh
 
 docker-release: docker  ## Tag latest and push docker images
-	docker push $(DOCKER_REPO)/$(PROJECT_NAME):$(DOCKER_VERSION)
-	docker tag $(DOCKER_REPO)/$(PROJECT_NAME):$(DOCKER_VERSION) $(DOCKER_REPO)/$(PROJECT_NAME):latest
-	docker push $(DOCKER_REPO)/$(PROJECT_NAME):latest
+	docker buildx build \
+	    -t $(DOCKER_REPO)/$(PROJECT_NAME):$(DOCKER_VERSION) \
+	    -t $(DOCKER_REPO)/$(PROJECT_NAME):latest \
+	    --build-arg VERSION=$(DOCKER_VERSION) \
+	    --platform linux/arm64,linux/amd64 \
+	    --push -f Dockerfile .
+
+docker-clean:  ## remove all docker build images
+	docker image rm $(ARM64_IMAGE) $(ARM32_IMAGE) $(ARM32HF_IMAGE) $(AMD64_IMAGE) $(MIPS64_IMAGE)

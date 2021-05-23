@@ -1,6 +1,6 @@
 # udp-proxy-2020 Changelog
 
-## Unreleased
+## v0.0.7 - 2021-05-23
 
 Added:
 
@@ -9,11 +9,15 @@ Added:
  - systemd startup script & docs
  - Start signing releases
  - Add UDM Utilities startup scripts
+ - Build ARM64 Docker container for UDM
+ - Update Alpine/Go for Docker
+ - Add --logfile option
 
 Fixed:
 
  - Small tweaks to docs & makefile targets
  - pfSense/FreeBSD rc.d scripts now support FreeBSD 12.x/pfSense 2.5.0
+ - Fix building on FreeBSD due to bash error
 
 ## v0.0.6 - 2021-01-18
 
