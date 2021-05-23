@@ -12,7 +12,7 @@ RUN cd udp-proxy-2020 && \
     mkdir -p /usr/local/bin && \
     cp dist/udp-proxy-2020 /usr/local/bin/udp-proxy-2020
 
-FROM alpine:3.12
+FROM alpine
 RUN apk add --update libpcap && \
     mkdir -p /usr/local/bin
 COPY --from=builder /usr/local/bin/udp-proxy-2020 /usr/local/bin/

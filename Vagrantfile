@@ -16,7 +16,7 @@ Vagrant.configure("2") do |config|
     trigger.info = "building pfSense/FreeBSD binary..."
     trigger.name = "build-binary"
     trigger.run = {inline: "vagrant rsync"}
-    trigger.run_remote = {inline: "bash -c 'cd udp-proxy-2020 && /usr/local/bin/gmake'"}
+    trigger.run_remote = {inline: "sh -c 'cd udp-proxy-2020 && /usr/local/bin/gmake'"}
   end
 end
 
