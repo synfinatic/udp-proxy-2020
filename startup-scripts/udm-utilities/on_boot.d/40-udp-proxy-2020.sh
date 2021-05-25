@@ -11,7 +11,7 @@ if [ -z "$PORTS" ]; then
     exit 1
 fi
 
-if [ -z "$INTEFACES" ]; then
+if [ -z "$INTERFACES" ]; then
     echo "Error: 'INTERFACES' is not set in config file" >/dev/stderr
     exit 1
 fi
