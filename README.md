@@ -1,6 +1,6 @@
 # udp-proxy-2020
 
-A crappy UDP proxy for the year 2020 and beyond.
+A crappy UDP router for the year 2020 and beyond.
 
 ## About
 
@@ -54,10 +54,13 @@ Pretty much any Unix-like system is supported because the dependcy list is only
 are quite common among the Roon user community.
 
 I [release binaries](https://github.com/synfinatic/udp-proxy-2020/releases)
-for Linux/x86_64, Linux/MIPS64, Linux/ARM64, FreeBSD/amd64 and MacOS/x86_64.
+for Linux/x86\_64, ARM64, ARM32 & MIPS64, FreeBSD/x86\_64 and MacOS/x86\_64.
+
+I hope to support FreeBSD/ARM64 [in the future](https://github.com/synfinatic/udp-proxy-2020/issues/53).
 
 There is also a [docker image available](
-https://hub.docker.com/repository/docker/synfinatic/udp-proxy-2020).
+https://hub.docker.com/repository/docker/synfinatic/udp-proxy-2020) for Linux on
+amd64 and arm64 (like the Ubiquiti UDM).
 
 ## Building udp-proxy-2020
 
@@ -83,10 +86,9 @@ You can get a full list of make targets and basic info about them by running:
 
 ## Usage
 
-`udp-proxy-2020` is still under heavy development.  Run `udp-proxy-2020 --help`
-for a current list of command line options.  Also, please note on many operating
-systems you will need to run it as the `root` user.  Linux systems can
-optionally grant the `CAP_NET_RAW` capability.
+Run `udp-proxy-2020 --help` for a current list of command line options.  
+Also, please note on many operating systems you will need to run it as the 
+`root` user.  Linux systems can optionally grant the `CAP_NET_RAW` capability.
 
 Currently there are only a few flags you probaly need to worry about:
 
@@ -104,7 +106,7 @@ Advanced options:
     clients on OpenVPN tunnels if you can't use `--fixed-ip` because clients
     don't have a fixed ip.
 
-There may be other flags of course, run `./udp-proxy-2020 --help` for a full list.
+There are other flags of course, run `./udp-proxy-2020 --help` for a full list.
 
 Example:
 
@@ -113,7 +115,7 @@ udp-proxy-2020 --port 9003 --interface eth0,eth0.100,eth1,tun0 --cachettl 300
 ```
 
 Would forward udp/9003 packets on four interfaces: eth0, eth1, VLAN100 on eth0 and tun0.
-Client IP's on tun0 would be remembered for 5minutes once they are learned.
+Client IP's on tun0 would be remembered for 5 minutes once they are learned.
 
 Note: "learning" requires the client to send a udp/9003 message first!  If
 your application requires a message to be sent *to* the client first, then you
@@ -128,6 +130,10 @@ platform, please send me a pull request!
 
 ## FAQ
 
+### Where can I download precompiled binaries?
+
+From the [releases page](https://github.com/synfinatic/udp-proxy-2020/releases) on Github.
+
 ### So is it a "proxy"?  Are there any proxy config settings I need to configure in my app?
 
 Nope, it's not a proxy.  It's more like a router.  You don't need to make
@@ -136,7 +142,7 @@ any changes other than running it on your home router/firewall.
 ### Then why did you call it udp-proxy-2020?
 
 Honestly, I didn't really think much about the name and this was the first thing
-that came to my mind.
+that came to my mind.  Also, [naming is hard](https://martinfowler.com/bliki/TwoHardThings.html).
 
 ### What network interface types are supported?
 
@@ -144,6 +150,12 @@ that came to my mind.
  * WiFi interfaces which appear as Ethernet
  * `tun` interfaces, like those used by [OpenVPN](https://openvpn.net)
  * `raw` interfaces, like those used by [Wireguard](https://www.wireguard.com)
+ * `vti` interfaces for site-to-site IPSec
+
+Note that L2TP VPN tunnels on Linux are not compatible with udp-proxy-2020
+because the Linux kernel exposes those interfaces as [Linux SLL](
+https://wiki.wireshark.org/SLL) which does not provide an accurate decode
+of the packets.
 
 ### How can I get udp-proxy-2020 working with Wireguard on Ubiquiti USG?
 
@@ -161,4 +173,4 @@ udp-proxy-2020 is built for multiple OS and hardware platforms:
  * Linux/ARM32EL: linux-arm32
  * Linux/ARM32HF (hardware floating point): linux-arm32hf
  * Linux/MIPS64: linux-mips64
- * FreeBSD/Intel x86_64:: freebsd-amd64
+ * FreeBSD/Intel x86_64:: freebsd-amd64 (works with pfSense on x86)
