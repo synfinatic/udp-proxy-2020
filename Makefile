@@ -151,19 +151,16 @@ $(LINUX_AMD64_S_NAME): .prepare
 	@which vagrant >/dev/null || "Please install Vagrant: https://www.vagrantup.com"
 	@which VBoxManage >/dev/null || "Please install VirtualBox: https://www.virtualbox.org"
 
-.PHONY: .vagrant-scp
-.vagrant-scp: .vagrant-check ## Install the vagrant scp plugin
-	@if test `vagrant plugin list | grep -c vagrant-scp` -eq 0 ; then \
-	    vagrant plugin install vagrant-scp ; fi
-
-freebsd: .vagrant-scp ## Build FreeBSD/pfSense binary using Vagrant VM
-	vagrant provision && vagrant up && vagrant scp :$(PROJECT_NAME)/dist/*freebsd* dist/
+freebsd: ## Build FreeBSD/pfSense binary using Vagrant VM
+	vagrant provision && vagrant up && vagrant ssh-config >.vagrant-ssh && \
+		scp -F .vagrant-ssh default:$(PROJECT_NAME)/dist/*freebsd* dist/
 
 freebsd-shell: ## SSH into FreeBSD Vagrant VM
 	vagrant ssh
 
 vagrant-clean: ## Destroy FreeBSD Vagrant VM
 	vagrant destroy -f || true
+	rm -f .vagrant-ssh
 
 ######################################################################
 # MIPS64 targets for building for Ubiquiti USG/Edgerouter
