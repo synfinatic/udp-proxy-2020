@@ -1,10 +1,10 @@
 Vagrant.configure("2") do |config|
-  config.vm.box = "freebsd/FreeBSD-11.3-STABLE"  # pfSense 2.4
+  config.vm.box = "freebsd/FreeBSD-12.2-STABLE"  # pfSense 2.5
   config.vm.guest = :freebsd
-  config.vm.box_version = "2020.04.23"
+  config.vm.box_version = "2021.09.23"
   config.ssh.shell = "sh"
   config.vm.provision "shell",
-    inline: "pkg install -y git gmake go libpcap virtualbox-ose-kmod virtualbox-ose-additions-nox11"
+    inline: "pkg install -y git gmake go libpcap virtualbox-ose-kmod virtualbox-ose-additions-nox11 sysutils/u-boot-qemu-arm"
   # have to rsync our code over to build
   config.vm.synced_folder ".", "/home/vagrant/udp-proxy-2020", create: true, disabled: false, id: 'source-code', type: "rsync"
   config.vm.provider :virtualbox do |vb|

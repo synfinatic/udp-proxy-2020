@@ -19,3 +19,6 @@ dist/
 *~
 .vagrant
 .DS_Store
+
+# our ssh config file
+.vagrant-ssh  

@@ -1,5 +1,11 @@
 # udp-proxy-2020 Changelog
 
+## Unreleased
+
+Changed:
+
+ - Use FreeBSD 12.2 for building freebsd-amd64 binary for pfSense 2.5.x
+
 ## v0.0.7 - 2021-05-23
 
 Added:
