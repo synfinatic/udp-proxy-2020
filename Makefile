@@ -1,6 +1,6 @@
 DIST_DIR ?= dist/
 GOOS ?= $(shell uname -s | tr "[:upper:]" "[:lower:]")
-GOARCH ?= $(shell uname -m)
+GOARCH ?= $(shell uname -m | sed -E 's/x86_64/amd64/')
 BUILDINFOSDET ?=
 UDP_PROXY_2020_ARGS ?=
 
@@ -22,12 +22,14 @@ URL                := https://github.com/$(DOCKER_REPO)/$(PROJECT_NAME)
 DESCRIPTION        := UDP Proxy 2020: A bad hack for a stupid problem
 BUILDINFOS         := $(shell date +%FT%T%z)$(BUILDINFOSDET)
 HOSTNAME           := $(shell hostname)
-LDFLAGS            := -X "main.Version=$(PROJECT_VERSION)" -X "main.Delta=$(PROJECT_DELTA)" -X "main.Buildinfos=$(BUILDINFOS)" -X "main.Tag=$(PROJECT_TAG)" -X "main.CommitID=$(PROJECT_COMMIT)"
-OUTPUT_NAME        := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-$(GOOS)-$(GOARCH)
+LDFLAGS            := -X "main.Version=$(PROJECT_VERSION)" -X "main.Delta=$(PROJECT_DELTA)"
+LDFLAGS            += -X "main.Buildinfos=$(BUILDINFOS)" -X "main.Tag=$(PROJECT_TAG)"
+LDFLAGS            += -X "main.CommitID=$(PROJECT_COMMIT)" -s -w
+OUTPUT_NAME        := $(DIST_DIR)$(PROJECT_NAME)-$(GOOS)-$(GOARCH)
 STR2PCAP_NAME      := $(DIST_DIR)str2pcap-$(PROJECT_VERSION)-$(GOOS)-$(GOARCH)
 DOCKER_VERSION     ?= v$(PROJECT_VERSION)
 
-ALL: $(OUTPUT_NAME) str2pcap ## Build binary
+ALL: $(OUTPUT_NAME) str2pcap ## Build our current str2pcap platform binary
 
 str2pcap: $(STR2PCAP_NAME)
 
@@ -36,28 +38,22 @@ $(STR2PCAP_NAME): str2pcap/*.go
 
 include help.mk  # place after ALL target and before all other targets
 
-release: build-release
+release: build-release ## Build and sign official release
 	cd dist && shasum -a 256 udp-proxy-2020* | gpg --clear-sign >release.sig
 
-build-release: clean linux-amd64 linux-mips64 linux-arm64 linux-arm32 linux-arm32hf $(OUTPUT_NAME) freebsd docker ## Build our release binaries
+build-release: clean linux-amd64 linux-mips64 linux-arm64 linux-arm32 linux-arm32hf darwin-amd64 freebsd docker ## Build our release binaries
 
 .PHONY: run
-run: cmd/*.go  ## build and run udp-proxy-2020 using $UDP_PROXY_2020_ARGS
+run: cmd/*.go ## build and run udp-proxy-2020 using $UDP_PROXY_2020_ARGS
 	sudo go run cmd/*.go $(UDP_PROXY_2020_ARGS)
 
-clean-all: vagrant-clean clean-docker clean ## Clean _everything_
+clean-all: freebsd-clean docker-clean clean ## Clean _everything_
 
 clean: ## Remove all binaries in dist
 	rm -f dist/*
 
 clean-go: ## Clean Go cache
 	go clean -i -r -cache -modcache
-
-.PHONY: clean-docker
-clean-docker: ## Remove all Docker build images
-	docker image rm synfinatic/udp-proxy-2020-amd64:latest 2>/dev/null || true
-	docker image rm synfinatic/udp-proxy-2020-mips64:latest 2>/dev/null || true
-	docker image rm synfinatic/udp-proxy-2020-arm64:latest 2>/dev/null || true
 
 $(OUTPUT_NAME): cmd/*.go .prepare
 	go build -ldflags='$(LDFLAGS)' -o $(OUTPUT_NAME) cmd/*.go
@@ -104,19 +100,19 @@ test-fmt: fmt ## Test to make sure code if formatted correctly
 	fi
 
 .PHONY: test-tidy
-test-tidy:  ## Test to make sure go.mod is tidy
+test-tidy: ## Test to make sure go.mod is tidy
 	@go mod tidy
 	@if test `git diff go.mod | wc -l` -gt 0; then \
 	    echo "Need to run 'go mod tidy' to clean up go.mod" ; \
 	    exit -1 ; \
 	fi
 
-precheck: test test-fmt test-tidy  ## Run all tests that happen in a PR
+precheck: test test-fmt test-tidy ## Run all tests that happen in a PR
 
 ######################################################################
 # Linux targets for building Linux in Docker
 ######################################################################
-LINUX_AMD64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-amd64-static
+LINUX_AMD64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-amd64
 AMD64_IMAGE 	   := $(DOCKER_REPO)/$(PROJECT_NAME)-builder-amd64:$(DOCKER_VERSION)
 
 .PHONY: linux-amd64
@@ -125,11 +121,6 @@ linux-amd64: ## Build static Linux/x86_64 binary using Docker
 	docker run --rm \
 	    --volume $(shell pwd)/dist:/build/$(PROJECT_NAME)/dist \
 	    $(AMD64_IMAGE)
-
-.PHONY: linux-amd64-clean
-linux-amd64-clean: ## Remove Linux/x86_64 Docker image
-	docker image rm $(AMD64_IMAGE)
-	rm dist/*linux-amd64-static
 
 .PHONY: linux-amd64-shell
 linux-amd64-shell: ## Get a shell in Linux/x86_64 Docker container
@@ -158,23 +149,24 @@ freebsd: .vagrant-check ## Build all FreeBSD/pfSense binaries using Vagrant VM
 freebsd-shell: ## SSH into FreeBSD Vagrant VM
 	vagrant ssh
 
-vagrant-clean: ## Destroy FreeBSD Vagrant VM
+freebsd-clean: ## Destroy FreeBSD Vagrant VM
 	vagrant destroy -f || true
 	rm -f .vagrant-ssh
 
-# FreeBSD aarch64, armv6 and armv7 targets only work inside of FreeBSD Vagrant VM 
-# and use `-static` to avoid conflits with the default $(OUTPUT_NAME) target
-FREEBSD_AMD64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-amd64-static
-FREEBSD_ARM64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-arm64-static
-FREEBSD_ARMV6_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-armv6-static
-FREEBSD_ARMV7_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-armv7-static
+ifeq ($(GOOS),freebsd)
+# FreeBSD aarch64, armv6 and armv7 targets only work inside of FreeBSD Vagrant VM
+FREEBSD_AMD64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-amd64
+FREEBSD_ARM64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-arm64
+FREEBSD_ARMV6_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-armv6
+FREEBSD_ARMV7_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-armv7
 
-.freebsd-amd64: $(FREEBSD_AMD64_S_NAME)
-.freebsd-arm64: $(FREEBSD_ARM64_S_NAME)
-.freebsd-armv6: $(FREEBSD_ARMV6_S_NAME)
-.freebsd-armv7: $(FREEBSD_ARMV7_S_NAME)
+freebsd-binaries: freebsd-amd64 freebsd-arm64 freebsd-armv6 freebsd-armv7 ## no-help
+freebsd-amd64: $(FREEBSD_AMD64_S_NAME) ## no-help
+freebsd-arm64: $(FREEBSD_ARM64_S_NAME) ## no-help
+freebsd-armv6: $(FREEBSD_ARMV6_S_NAME) ## no-help
+freebsd-armv7: $(FREEBSD_ARMV7_S_NAME) ## no-help
 
-# Seems to be a bug with CGO & Clang where it always wants to use the host arch 
+# Seems to be a bug with CGO & Clang where it always wants to use the host arch
 # linker and it doesn't seem to honor the LD ENV var :(
 .PHONY: .freebsd-arm-cross .freebsd-amd64-cross .freebsd-aarch64-cross
 .freebsd-aarch64-cross:
@@ -201,10 +193,9 @@ FREEBSD_ARMV7_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-ar
 $(FREEBSD_AMD64_S_NAME): .freebsd-amd64-cross
 	GOOS=freebsd GOARCH=amd64 CGO_ENABLED=1 \
 	CGO_LDFLAGS='-libverbs' \
-	go build \
-	-ldflags '$(LDFLAGS) -linkmode external -extldflags -static -s -w' \
+	go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 	-o $(FREEBSD_AMD64_S_NAME) cmd/*.go
-
+	@echo "Created: $(FREEBSD_AMD64_S_NAME)"
 
 $(FREEBSD_ARM64_S_NAME): .freebsd-aarch64-cross
 	GOOS=freebsd GOARCH=arm64 CGO_ENABLED=1 \
@@ -212,19 +203,19 @@ $(FREEBSD_ARM64_S_NAME): .freebsd-aarch64-cross
 	CGO_CFLAGS='-I/usr/local/freebsd-sysroot/aarch64/usr/include' \
 	CC=/usr/local/freebsd-sysroot/aarch64/bin/cc \
 	PKG_CONFIG_PATH=/usr/local/freebsd-sysroot/aarch64/usr/libdata/pkgconfig \
-	go build \
-	-ldflags '$(LDFLAGS) -linkmode external -extldflags -static -s -w' \
+	go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 	-o $(FREEBSD_ARM64_S_NAME) cmd/*.go
+	@echo "Created: $(FREEBSD_ARM64_S_NAME)"
 
-$(FREEBSD_ARMV6_S_NAME): .freebsd-arm-cross 
+$(FREEBSD_ARMV6_S_NAME): .freebsd-arm-cross
 	GOOS=freebsd GOARCH=arm GOARM=6 CGO_ENABLED=1 \
 	CGO_LDFLAGS='--sysroot=/usr/local/freebsd-sysroot/armv6 -libverbs' \
 	CGO_CFLAGS='-I/usr/local/freebsd-sysroot/armv6/usr/include' \
 	CC=/usr/local/freebsd-sysroot/armv6/bin/cc \
 	PKG_CONFIG_PATH=/usr/local/freebsd-sysroot/armv6/usr/libdata/pkgconfig \
-	go build \
-	-ldflags '$(LDFLAGS) -linkmode external -extldflags -static -s -w' \
+	go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 	-o $(FREEBSD_ARMV6_S_NAME) cmd/*.go
+	@echo "Created: $(FREEBSD_ARMV6_S_NAME)"
 
 $(FREEBSD_ARMV7_S_NAME): .freebsd-arm-cross
 	GOOS=freebsd GOARCH=arm GOARM=7 CGO_ENABLED=1 \
@@ -232,14 +223,15 @@ $(FREEBSD_ARMV7_S_NAME): .freebsd-arm-cross
 	CGO_CFLAGS='-I/usr/local/freebsd-sysroot/armv7/usr/include' \
 	CC=/usr/local/freebsd-sysroot/armv7/bin/cc \
 	PKG_CONFIG_PATH=/usr/local/freebsd-sysroot/armv7/usr/libdata/pkgconfig \
-	go build \
-	-ldflags '$(LDFLAGS) -linkmode external -extldflags -static -s -w' \
+	go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 	-o $(FREEBSD_ARMV7_S_NAME) cmd/*.go
+	@echo "Created: $(FREEBSD_ARMV7_S_NAME)"
+endif
 
 ######################################################################
 # MIPS64 targets for building for Ubiquiti USG/Edgerouter
 ######################################################################
-LINUX_MIPS64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-mips64-static
+LINUX_MIPS64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-mips64
 MIPS64_IMAGE 	    := $(DOCKER_REPO)/$(PROJECT_NAME)-builder-mips64:$(DOCKER_VERSION)
 
 .PHONY: linux-mips64
@@ -263,15 +255,10 @@ $(LINUX_MIPS64_S_NAME): .prepare
 	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_MIPS64_S_NAME) cmd/*.go
 	@echo "Created: $(LINUX_MIPS64_S_NAME)"
 
-.PHONY: linux-mips64-clean
-linux-mips64-clean: ## Remove Linux/MIPS64 Docker image
-	docker image rm $(MIPS64_IMAGE)
-	rm dist/*linux-mips64
-
 ######################################################################
-# ARM64 targets for building for Linux/ARM64 aarch64
+# Targets for building for Linux/ARM64 aarch64
 ######################################################################
-LINUX_ARM64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-arm64-static
+LINUX_ARM64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-arm64
 ARM64_IMAGE 	   := $(DOCKER_REPO)/$(PROJECT_NAME)-builder-arm64:$(DOCKER_VERSION)
 
 .PHONY: linux-arm64
@@ -296,15 +283,10 @@ $(LINUX_ARM64_S_NAME): .prepare
 	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_ARM64_S_NAME) cmd/*.go
 	@echo "Created: $(LINUX_ARM64_S_NAME)"
 
-.PHONY: linux-arm64-clean
-linux-arm64-clean: ## Remove Linux/arm64 Docker image
-	docker image rm $(ARM64_IMAGE)
-	rm dist/*linux-arm64
-
 ######################################################################
-# ARM64 targets for building for Linux/ARM32 no hardware floating point
+# Targets for building for Linux/ARM32 no hardware floating point
 ######################################################################
-LINUX_ARM32_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-arm32-static
+LINUX_ARM32_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-arm32
 ARM32_IMAGE 	   := $(DOCKER_REPO)/$(PROJECT_NAME)-builder-arm32:$(DOCKER_VERSION)
 
 .PHONY: linux-arm32
@@ -328,15 +310,10 @@ $(LINUX_ARM32_S_NAME): .prepare
 	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_ARM32_S_NAME) cmd/*.go
 	@echo "Created: $(LINUX_ARM32_S_NAME)"
 
-.PHONY: linux-arm32-clean
-linux-arm32-clean: ## Remove Linux/arm32 Docker image
-	docker image rm $(ARM32_IMAGE)
-	rm dist/*linux-arm32
-
 ######################################################################
-# ARM64 targets for building for Linux/ARM32 with hardware floating point
+# Targets for building for Linux/ARM32 with hardware floating point
 ######################################################################
-LINUX_ARM32HF_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-arm32hf-static
+LINUX_ARM32HF_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-arm32hf
 ARM32HF_IMAGE 	     := $(DOCKER_REPO)/$(PROJECT_NAME)-builder-arm32hf:$(DOCKER_VERSION)
 
 .PHONY: linux-arm32hf
@@ -360,17 +337,24 @@ $(LINUX_ARM32HF_S_NAME): .prepare
 	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_ARM32HF_S_NAME) cmd/*.go
 	@echo "Created: $(LINUX_ARM32HF_S_NAME)"
 
-.PHONY: linux-arm32hf-clean
-linux-arm32hf-clean: ## Remove Linux/arm32hf Docker image
-	docker image rm $(ARM32HF_IMAGE)
-	rm dist/*linux-arm32hf
+######################################################################
+# Targets for building macOS/Darwin (only valid on macOS)
+######################################################################
+ifeq ($(GOOS),darwin)
+DARWIN_AMD64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-darwin-amd64
+darwin-amd64: $(DARWIN_AMD64_S_NAME) ## Build macOS/amd64 binary
+
+$(DARWIN_AMD64_S_NAME): cmd/*.go .prepare
+	GOOS=darwin GOARCH=amd64 go build -ldflags='$(LDFLAGS)' \
+	     -o $(DARWIN_AMD64_S_NAME) cmd/*.go
+	@echo "Created: $(DARWIN_AMD64_S_NAME)"
+endif
 
 ######################################################################
 # Docker image for running in docker container for UDM Pro/etc
 ######################################################################
-
-.PHONY: docker
-docker:  ## Build docker image for AMD64 for testing?
+.PHONY: docker docker-clean .docker
+docker: ## Build docker image for Linux/amd64
 	docker build \
 	    -t $(DOCKER_REPO)/$(PROJECT_NAME):$(DOCKER_VERSION) \
 	    --build-arg VERSION=$(DOCKER_VERSION) \
@@ -380,12 +364,12 @@ docker:  ## Build docker image for AMD64 for testing?
 	CGO_ENABLED=1 \
 	go build -ldflags '$(LDFLAGS)' -o dist/udp-proxy-2020 cmd/*.go
 
-docker-shell:  ## Get a shell in the docker image
+docker-shell: ## Get a shell in the docker image
 	docker run --rm -it --network=host \
 	    $(DOCKER_REPO)/$(PROJECT_NAME):$(DOCKER_VERSION) \
 	    /bin/sh
 
-docker-release: docker  ## Tag latest and push docker images
+docker-release: docker ## Tag and push docker images Linux AMD64/ARM64
 	docker buildx build \
 	    -t $(DOCKER_REPO)/$(PROJECT_NAME):$(DOCKER_VERSION) \
 	    -t $(DOCKER_REPO)/$(PROJECT_NAME):latest \
@@ -393,5 +377,5 @@ docker-release: docker  ## Tag latest and push docker images
 	    --platform linux/arm64,linux/amd64 \
 	    --push -f Dockerfile .
 
-docker-clean:  ## remove all docker build images
-	docker image rm $(ARM64_IMAGE) $(ARM32_IMAGE) $(ARM32HF_IMAGE) $(AMD64_IMAGE) $(MIPS64_IMAGE)
+docker-clean: ## remove all docker build images
+	docker image rm $(ARM64_IMAGE) $(ARM32_IMAGE) $(ARM32HF_IMAGE) $(AMD64_IMAGE) $(MIPS64_IMAGE) || true

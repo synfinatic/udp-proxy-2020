@@ -54,13 +54,11 @@ Pretty much any Unix-like system is supported because the dependcy list is only
 are quite common among the Roon user community.
 
 I [release binaries](https://github.com/synfinatic/udp-proxy-2020/releases)
-for Linux/x86\_64, ARM64, ARM32 & MIPS64, FreeBSD/x86\_64 and MacOS/x86\_64.
-
-I hope to support FreeBSD/ARM64 [in the future](https://github.com/synfinatic/udp-proxy-2020/issues/53).
+for Linux, FreeBSD (pfSense) and MacOS for Intel, ARM and MIPS hardware.
 
 There is also a [docker image available](
 https://hub.docker.com/repository/docker/synfinatic/udp-proxy-2020) for Linux on
-amd64 and arm64 (like the Ubiquiti UDM).
+AMD64 and ARM64 (like the Ubiquiti UDM).
 
 ## Building udp-proxy-2020
 
@@ -77,9 +75,11 @@ you:
     USG/EdgeRouter) via Docker
  * Linux on ARM64 `make linux-arm64` (Linux/ARM64 for Ubiquiti UDM/UDM Pro)
     via Docker
- * FreeBSD 11.3 on x86_64 `make freebsd` (pfSense 2.4) via
+ * Linux on ARM32 `make linux-arm32` via Docker
+ * Linux on ARM32 w/ hardware floating point `make linux-arm32hf` via Docker
+ * FreeBSD 12.2 on x86_64, ARM64/v6/v7 `make freebsd` (pfSense 2.5) via
 [Vagrant](https://www.vagrantup.com) & [VirtualBox](https://www.virtualbox.org)
- * Docker `make docker`
+ * Docker image to run udp-proxy-2020 in docker `make docker`
 
 You can get a full list of make targets and basic info about them by running:
 `make help`.
@@ -167,10 +167,13 @@ forums wrote up
 
 udp-proxy-2020 is built for multiple OS and hardware platforms:
 
- * MacOS/Intel x86_64: darwin-x86_64
- * Linux/Intel x86_64: linux-amd64
- * Linux/ARM64: linux-arm64
- * Linux/ARM32EL: linux-arm32
- * Linux/ARM32HF (hardware floating point): linux-arm32hf
- * Linux/MIPS64: linux-mips64
- * FreeBSD/Intel x86_64:: freebsd-amd64 (works with pfSense on x86)
+ * MacOS/Intel x86_64: `darwin-amd64`
+ * Linux/Intel x86_64: `linux-amd64`
+ * Linux/ARM64: `linux-arm64`
+ * Linux/ARM32EL: `linux-arm32`
+ * Linux/ARM32HF (hardware floating point): `linux-arm32hf`
+ * Linux/MIPS64: `linux-mips64` (Ubiquiti USG/EdgeRouter)
+ * FreeBSD/Intel x86_64: `freebsd-amd64` and `freebsd-amd64` (works with pfSense on x86)
+ * FreeBSD/ARM64 aarch64: `freebsd-arm64` (Netgate SG-1100 & SG-2100)
+ * FreeBSD/ARMv6 armv6: `freebsd-armv6`
+ * FreeBSD/ARMv7 armv7: `freebsd-armv7` (Netgate SG-3100)
