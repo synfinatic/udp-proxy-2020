@@ -4,7 +4,9 @@
 
 Changed:
 
- - Use FreeBSD 12.2 for building freebsd-amd64 binary for pfSense 2.5.x
+ - Use FreeBSD 12.2 for building binaries (pfSense 2.5.x)
+ - Add support for building FreeBSD ARM64 (aarch64), ARMv6 and ARMv7 binaries #53
+ - FreeBSD AMD64 now has a static linked binary available
 
 ## v0.0.7 - 2021-05-23
 

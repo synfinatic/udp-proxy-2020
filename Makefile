@@ -151,7 +151,7 @@ $(LINUX_AMD64_S_NAME): .prepare
 	@which vagrant >/dev/null || "Please install Vagrant: https://www.vagrantup.com"
 	@which VBoxManage >/dev/null || "Please install VirtualBox: https://www.virtualbox.org"
 
-freebsd: ## Build FreeBSD/pfSense binary using Vagrant VM
+freebsd: .vagrant-check ## Build all FreeBSD/pfSense binaries using Vagrant VM
 	vagrant provision && vagrant up && vagrant ssh-config >.vagrant-ssh && \
 		scp -F .vagrant-ssh default:$(PROJECT_NAME)/dist/*freebsd* dist/
 
@@ -161,6 +161,80 @@ freebsd-shell: ## SSH into FreeBSD Vagrant VM
 vagrant-clean: ## Destroy FreeBSD Vagrant VM
 	vagrant destroy -f || true
 	rm -f .vagrant-ssh
+
+# FreeBSD aarch64, armv6 and armv7 targets only work inside of FreeBSD Vagrant VM 
+# and use `-static` to avoid conflits with the default $(OUTPUT_NAME) target
+FREEBSD_AMD64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-amd64-static
+FREEBSD_ARM64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-arm64-static
+FREEBSD_ARMV6_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-armv6-static
+FREEBSD_ARMV7_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-armv7-static
+
+.freebsd-amd64: $(FREEBSD_AMD64_S_NAME)
+.freebsd-arm64: $(FREEBSD_ARM64_S_NAME)
+.freebsd-armv6: $(FREEBSD_ARMV6_S_NAME)
+.freebsd-armv7: $(FREEBSD_ARMV7_S_NAME)
+
+# Seems to be a bug with CGO & Clang where it always wants to use the host arch 
+# linker and it doesn't seem to honor the LD ENV var :(
+.PHONY: .freebsd-arm-cross .freebsd-amd64-cross .freebsd-aarch64-cross
+.freebsd-aarch64-cross:
+	@cd /usr/local/bin && \
+		if test ! -f x86_64-unknown-freebsd12.2-ld.bfd.bak ; then \
+			mv x86_64-unknown-freebsd12.2-ld.bfd x86_64-unknown-freebsd12.2-ld.bfd.bak ; \
+			ln -s aarch64-unknown-freebsd12.2-ld.bfd x86_64-unknown-freebsd12.2-ld.bfd ; \
+		fi
+
+.freebsd-arm-cross:
+	@cd /usr/local/bin && \
+		if test ! -f x86_64-unknown-freebsd12.2-ld.bfd.bak ; then \
+			mv x86_64-unknown-freebsd12.2-ld.bfd x86_64-unknown-freebsd12.2-ld.bfd.bak ; \
+			ln -s arm-gnueabi-freebsd12.2-ld.bfd x86_64-unknown-freebsd12.2-ld.bfd ; \
+		fi
+
+.freebsd-amd64-cross:
+	@cd /usr/local/bin && \
+		if test -f x86_64-unknown-freebsd12.2-ld.bfd.bak ; then \
+			rm x86_64-unknown-freebsd12.2-ld.bfd ; \
+			mv x86_64-unknown-freebsd12.2-ld.bfd.bak x86_64-unknown-freebsd12.2-ld.bfd ;\
+		fi
+
+$(FREEBSD_AMD64_S_NAME): .freebsd-amd64-cross
+	GOOS=freebsd GOARCH=amd64 CGO_ENABLED=1 \
+	CGO_LDFLAGS='-libverbs' \
+	go build \
+	-ldflags '$(LDFLAGS) -linkmode external -extldflags -static -s -w' \
+	-o $(FREEBSD_AMD64_S_NAME) cmd/*.go
+
+
+$(FREEBSD_ARM64_S_NAME): .freebsd-aarch64-cross
+	GOOS=freebsd GOARCH=arm64 CGO_ENABLED=1 \
+	CGO_LDFLAGS='--sysroot=/usr/local/freebsd-sysroot/aarch64 -libverbs' \
+	CGO_CFLAGS='-I/usr/local/freebsd-sysroot/aarch64/usr/include' \
+	CC=/usr/local/freebsd-sysroot/aarch64/bin/cc \
+	PKG_CONFIG_PATH=/usr/local/freebsd-sysroot/aarch64/usr/libdata/pkgconfig \
+	go build \
+	-ldflags '$(LDFLAGS) -linkmode external -extldflags -static -s -w' \
+	-o $(FREEBSD_ARM64_S_NAME) cmd/*.go
+
+$(FREEBSD_ARMV6_S_NAME): .freebsd-arm-cross 
+	GOOS=freebsd GOARCH=arm GOARM=6 CGO_ENABLED=1 \
+	CGO_LDFLAGS='--sysroot=/usr/local/freebsd-sysroot/armv6 -libverbs' \
+	CGO_CFLAGS='-I/usr/local/freebsd-sysroot/armv6/usr/include' \
+	CC=/usr/local/freebsd-sysroot/armv6/bin/cc \
+	PKG_CONFIG_PATH=/usr/local/freebsd-sysroot/armv6/usr/libdata/pkgconfig \
+	go build \
+	-ldflags '$(LDFLAGS) -linkmode external -extldflags -static -s -w' \
+	-o $(FREEBSD_ARMV6_S_NAME) cmd/*.go
+
+$(FREEBSD_ARMV7_S_NAME): .freebsd-arm-cross
+	GOOS=freebsd GOARCH=arm GOARM=7 CGO_ENABLED=1 \
+	CGO_LDFLAGS='--sysroot=/usr/local/freebsd-sysroot/armv7 -libverbs' \
+	CGO_CFLAGS='-I/usr/local/freebsd-sysroot/armv7/usr/include' \
+	CC=/usr/local/freebsd-sysroot/armv7/bin/cc \
+	PKG_CONFIG_PATH=/usr/local/freebsd-sysroot/armv7/usr/libdata/pkgconfig \
+	go build \
+	-ldflags '$(LDFLAGS) -linkmode external -extldflags -static -s -w' \
+	-o $(FREEBSD_ARMV7_S_NAME) cmd/*.go
 
 ######################################################################
 # MIPS64 targets for building for Ubiquiti USG/Edgerouter
