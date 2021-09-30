@@ -1,6 +1,6 @@
 .PHONY: help
 help: ## Shows this generated help info for Makefile targets
-	@grep -E '^[a-zA-Z_-]+:' $(MAKEFILE_LIST) |                       \
+	@grep -E '^[a-zA-Z0-9_-]+:' $(MAKEFILE_LIST) |                       \
 	  awk -F: '                                                       \
 	  {                                                               \
 	    target=$$2;                                                   \
@@ -22,7 +22,7 @@ help: ## Shows this generated help info for Makefile targets
 	  }' | sort
 
 .targets:
-	@grep -E '^[a-zA-Z_-]+:' $(MAKEFILE_LIST) | \
+	@grep -E '^[a-zA-Z0-9_-]+:' $(MAKEFILE_LIST) | \
 	  awk -F: '                                 \
 	  {                                         \
 	    target=$$2;                             \

@@ -5,7 +5,7 @@ Vagrant.configure("2") do |config|
   config.ssh.shell = "sh"
   config.vm.provision "shell", inline: <<-SHELL
     pkg install -y git gmake go libpcap virtualbox-ose-kmod \
-      virtualbox-ose-additions-nox11 wget aarch64-gcc9 \
+      virtualbox-ose-additions-nox11 aarch64-gcc9 \
       aarch64-binutils arm-gnueabi-binutils amd64-binutils \
       armv6-freebsd-sysroot armv7-freebsd-sysroot aarch64-freebsd-sysroot
   SHELL
@@ -23,7 +23,7 @@ Vagrant.configure("2") do |config|
     trigger.info = "building pfSense/FreeBSD binary..."
     trigger.name = "build-binary"
     trigger.run = {inline: "vagrant rsync"}
-    trigger.run_remote = {inline: "sh -c 'cd udp-proxy-2020 && gmake .freebsd-amd64 .freebsd-arm64 .freebsd-armv6 .freebsd-armv7 && gmake'"}
+    trigger.run_remote = {inline: "sh -c 'cd udp-proxy-2020 && gmake freebsd-binaries'"}
   end
 end
 
