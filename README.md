@@ -169,11 +169,11 @@ udp-proxy-2020 is built for multiple OS and hardware platforms:
 
  * MacOS/Intel x86_64: `darwin-amd64`
  * Linux/Intel x86_64: `linux-amd64`
- * Linux/ARM64: `linux-arm64`
- * Linux/ARM32EL: `linux-arm32`
- * Linux/ARM32HF (hardware floating point): `linux-arm32hf`
+ * Linux/ARMv8: `linux-arm64` (RasPi 2 V1.2 and above, Ubiquiti UniFi Dream Machine)
+ * Linux/ARMv7 (hardware floating point): `linux-arm32hf` (RasPi 2 V1.1 and below)
+ * Linux/ARMv7 (software floating point): `linux-arm32`
  * Linux/MIPS64: `linux-mips64` (Ubiquiti USG/EdgeRouter)
- * FreeBSD/Intel x86_64: `freebsd-amd64` and `freebsd-amd64` (works with pfSense on x86)
- * FreeBSD/ARM64 aarch64: `freebsd-arm64` (Netgate SG-1100 & SG-2100)
- * FreeBSD/ARMv6 armv6: `freebsd-armv6`
- * FreeBSD/ARMv7 armv7: `freebsd-armv7` (Netgate SG-3100)
+ * FreeBSD/Intel x86_64: `freebsd-amd64` (works with pfSense on x86)
+ * FreeBSD/ARMv8: `freebsd-arm64` (Netgate SG-1100 & SG-2100)
+ * FreeBSD/ARMv7: `freebsd-armv7` (Netgate SG-3100)
+ * FreeBSD/ARMv6: `freebsd-armv6`
