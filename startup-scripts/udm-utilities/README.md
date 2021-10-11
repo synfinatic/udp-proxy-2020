@@ -8,7 +8,7 @@ broadcast/multicast  messages across VLANs and VPN connections.  Useful for
 
 ## Requirements
 
- 1. You have successfully setup the on boot script described
+ * You have successfully configured udm-utilities as described
     [here](https://github.com/boostchicken/udm-utilities/tree/master/on-boot-script)
 
 ## Customization
@@ -27,12 +27,7 @@ while the `EXTRA_VARS` variable should be a single string in quotes.
 
 ## Steps
 
- 1. Make a directory for the config file:
-
-   ```sh
-    mkdir -p /mnt/data/udp-proxy-2020
-    ```
-
+ 1. Make a directory for the config file: `mkdir -p /mnt/data/udp-proxy-2020`
  1. Edit `udp-proxy-2020.conf` for your needs.
  1. Copy modified `udp-proxy-2020.conf` in `/mnt/data/udp-proxy-2020`
  1. Copy [40-udp-proxy-2020.sh](on_boot.d/40-udp-proxy-2020.sh) to
