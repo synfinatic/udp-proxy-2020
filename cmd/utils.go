@@ -2,9 +2,12 @@ package main
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
+	"net"
 	"strings"
 	"time"
+
+	"github.com/google/gopacket/pcap"
+	log "github.com/sirupsen/logrus"
 )
 
 // Check to see if the string is in the slice
@@ -28,7 +31,7 @@ func stringPrefixInSlice(a string, list []string) bool {
 }
 
 // takes a list of ports and builds our BPF filter
-func buildBPFFilter(ports []int32) string {
+func buildBPFFilter(ports []int32, addresses []pcap.InterfaceAddress, promisc bool) string {
 	if len(ports) < 1 {
 		log.Fatal("--port must be specified one or more times")
 	}
@@ -42,6 +45,24 @@ func buildBPFFilter(ports []int32) string {
 	} else {
 		bpf_filter = bpf_filters[0]
 	}
+
+	// add filter to accept only traffic with a src IP matching the interface
+	// This should avoid network loops with NIC/drivers which do not honor the
+	// pcap.SetDirection() call.
+	networks := []string{}
+	for _, addr := range addresses {
+		if net, err := getNetwork(addr); err == nil {
+			if maskLen, _ := addr.Netmask.Size(); maskLen > 0 {
+				networks = append(networks, fmt.Sprintf("src net %s", net))
+			}
+		}
+	}
+	var networkFilter string
+	if len(networks) >= 1 {
+		networkFilter = strings.Join(networks, " or ")
+		bpf_filter = fmt.Sprintf("(%s) and (%s)", bpf_filter, networkFilter)
+	}
+
 	return bpf_filter
 }
 
@@ -52,4 +73,16 @@ func parseTimeout(timeout int64) time.Duration {
 		log.Fatal(err)
 	}
 	return to
+}
+
+// takes a net.IP and returns x.x.x.x/len format
+func getNetwork(addr pcap.InterfaceAddress) (string, error) {
+	var ip4 net.IP
+	if ip4 = addr.IP.To4(); ip4 == nil {
+		return "", fmt.Errorf("Unable to getNetwork for IPv6 address: %s", addr.IP.String())
+	}
+
+	len, _ := addr.Netmask.Size()
+	mask := net.CIDRMask(len, 32)
+	return fmt.Sprintf("%s/%d", ip4.Mask(mask), len), nil
 }
