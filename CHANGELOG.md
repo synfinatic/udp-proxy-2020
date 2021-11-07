@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.0.8 - 2021-11-07
+
 Changed:
 
  - Use FreeBSD 12.2 for building binaries (pfSense 2.5.x)
@@ -10,6 +12,13 @@ Changed:
  - Update Makefile targets and improve `make help`
  - Release binaries no longer end in `-static`
  - Release binaries are now stripped and about 33% of their previous sizes
+ - Improve debug output
+
+Fixed: 
+
+- Now use 'src net x.x.x.x/y' in the BPF filter to restrict packets we forward
+    for platforms like Netgate SG5100 where pcap.SetDirection() doesn't work 
+    to prevent infinite loops #71
 
 ## v0.0.7 - 2021-05-23
 

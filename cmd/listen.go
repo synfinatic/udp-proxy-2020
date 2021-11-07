@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
@@ -89,7 +90,7 @@ func newListener(netif *net.Interface, promisc bool, ports []int32, to time.Dura
 		sendpkt: make(chan Send, SendBufferSize),
 		clients: clients,
 	}
-	log.Debugf("Listen: %v", new)
+	log.Debugf("Listen: %s", spew.Sdump(new))
 	return new
 }
 
@@ -223,7 +224,7 @@ func (l *Listen) sendPacket(dstip net.IP, eth layers.Ethernet, loop layers.Loopb
 
 	// UDP payload
 	if err := payload.SerializeTo(buffer, opts); err != nil {
-		log.Fatalf("can't serialize payload: %v", payload)
+		log.Fatalf("can't serialize payload: %s", spew.Sdump(payload))
 	}
 
 	// UDP checksums can't be calculated via SerializeOptions
@@ -237,7 +238,7 @@ func (l *Listen) sendPacket(dstip net.IP, eth layers.Ethernet, loop layers.Loopb
 	}
 
 	if err := new_udp.SerializeTo(buffer, opts); err != nil {
-		log.Fatalf("can't serialize UDP header: %v", udp)
+		log.Fatalf("can't serialize UDP header: %s", spew.Sdump(udp))
 	}
 
 	// IPv4 header
@@ -257,7 +258,7 @@ func (l *Listen) sendPacket(dstip net.IP, eth layers.Ethernet, loop layers.Loopb
 		Options:    ip4.Options,
 	}
 	if err := new_ip4.SerializeTo(buffer, csum_opts); err != nil {
-		log.Fatalf("can't serialize IP header: %v", new_ip4)
+		log.Fatalf("can't serialize IP header: %s", spew.Sdump(new_ip4))
 	}
 
 	// Add our L2 header to the buffer
@@ -267,7 +268,7 @@ func (l *Listen) sendPacket(dstip net.IP, eth layers.Ethernet, loop layers.Loopb
 			Family: layers.ProtocolFamilyIPv4,
 		}
 		if err := loop.SerializeTo(buffer, opts); err != nil {
-			log.Fatalf("can't serialize Loop header: %v", loop)
+			log.Fatalf("can't serialize Loop header: %s", spew.Sdump(loop))
 		}
 	case layers.LinkTypeEthernet.String():
 		// build a new ethernet header
@@ -278,7 +279,7 @@ func (l *Listen) sendPacket(dstip net.IP, eth layers.Ethernet, loop layers.Loopb
 			EthernetType: layers.EthernetTypeIPv4,
 		}
 		if err := new_eth.SerializeTo(buffer, opts); err != nil {
-			log.Fatalf("can't serialize Eth header: %v", new_eth)
+			log.Fatalf("can't serialize Eth header: %s", spew.Sdump(new_eth))
 		}
 	case layers.LinkTypeRaw.String():
 		// no L2 header
