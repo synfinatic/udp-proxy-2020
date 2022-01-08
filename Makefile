@@ -256,86 +256,55 @@ $(LINUX_MIPS64_S_NAME): .prepare
 	@echo "Created: $(LINUX_MIPS64_S_NAME)"
 
 ######################################################################
-# Targets for building for Linux/ARM64 aarch64
+# Targets for building for Linux/ARM32 no hardware floating point
 ######################################################################
+LINUX_ARMV5_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-armv5
+LINUX_ARMV6_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-armv6
+LINUX_ARMV7_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-armv7
 LINUX_ARM64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-arm64
-ARM64_IMAGE 	   := $(DOCKER_REPO)/$(PROJECT_NAME)-builder-arm64:$(DOCKER_VERSION)
+ARM_IMAGE 	   := $(DOCKER_REPO)/$(PROJECT_NAME)-builder-arm:$(DOCKER_VERSION)
 
-.PHONY: linux-arm64
-linux-arm64: .prepare ## Build Linux/arm64 static binary in Docker container
-	docker build -t $(ARM64_IMAGE) -f Dockerfile.arm64 .
+.PHONY: linux-arm
+linux-arm: .prepare ## Build Linux/arm static binaries in Docker container
+	docker build -t $(ARM_IMAGE) -f Dockerfile.arm .
 	docker run --rm \
 	    --volume $(shell pwd):/build/udp-proxy-2020 \
-	    $(ARM64_IMAGE)
+	    $(ARM_IMAGE)
 
-.PHONY: linux-arm64-shell
-linux-arm64-shell: .prepare ## SSH into Linux/arm64 build Docker container
+.PHONY: linux-arm-shell
+linux-arm-shell: .prepare ## SSH into Linux/arm build Docker container
 	docker run -it --rm \
 	    --volume $(shell pwd):/build/udp-proxy-2020 \
-	    --entrypoint /bin/bash \
-	    $(ARM64_IMAGE)
+	    --entrypoint /bin/bash $(ARM_IMAGE)
 
-.linux-arm64: $(LINUX_ARM64_S_NAME)
+.linux-arm: $(LINUX_ARMV5_S_NAME) $(LINUX_ARMV6_S_NAME) $(LINUX_ARMV7_S_NAME) $(LINUX_ARM64_S_NAME)
+$(LINUX_ARMV5_S_NAME): .prepare
+	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
+	    GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=1 CC=arm-linux-gnueabi-gcc-10 \
+	    PKG_CONFIG_PATH=/usr/arm-linux-gnueabi/lib/pkgconfig \
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_ARMV5_S_NAME) cmd/*.go
+	@echo "Created: $(LINUX_ARMV5_S_NAME)"
+
+$(LINUX_ARMV6_S_NAME): .prepare
+	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
+	    GOOS=linux GOARCH=arm GOARM=6 CGO_ENABLED=1 CC=arm-linux-gnueabihf-gcc-10 \
+	    PKG_CONFIG_PATH=/usr/arm-linux-gnueabihf/lib/pkgconfig \
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_ARMV6_S_NAME) cmd/*.go
+	@echo "Created: $(LINUX_ARMV6_S_NAME)"
+
+$(LINUX_ARMV7_S_NAME): .prepare
+	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
+	    GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=1 CC=arm-linux-gnueabihf-gcc-10 \
+	    PKG_CONFIG_PATH=/usr/arm-linux-gnueabihf/lib/pkgconfig \
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_ARMV7_S_NAME) cmd/*.go
+	@echo "Created: $(LINUX_ARMV7_S_NAME)"
+
 $(LINUX_ARM64_S_NAME): .prepare
 	LDFLAGS='-l/usr/aarch64-linux-gnu/lib/libpcap.a' \
 	    GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc-10 \
 	    PKG_CONFIG_PATH=/usr/aarch64-linux-gnu/lib/pkgconfig \
 	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_ARM64_S_NAME) cmd/*.go
 	@echo "Created: $(LINUX_ARM64_S_NAME)"
-
-######################################################################
-# Targets for building for Linux/ARM32 no hardware floating point
-######################################################################
-LINUX_ARM32_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-arm32
-ARM32_IMAGE 	   := $(DOCKER_REPO)/$(PROJECT_NAME)-builder-arm32:$(DOCKER_VERSION)
-
-.PHONY: linux-arm32
-linux-arm32: .prepare ## Build Linux/arm32 static binary in Docker container
-	docker build -t $(ARM32_IMAGE) -f Dockerfile.arm32 .
-	docker run --rm \
-	    --volume $(shell pwd):/build/udp-proxy-2020 \
-	    $(ARM32_IMAGE)
-
-.PHONY: linux-arm32-shell
-linux-arm32-shell: .prepare ## SSH into Linux/arm32 build Docker container
-	docker run -it --rm \
-	    --volume $(shell pwd):/build/udp-proxy-2020 \
-	    --entrypoint /bin/bash $(ARM32_IMAGE)
-
-.linux-arm32: $(LINUX_ARM32_S_NAME)
-$(LINUX_ARM32_S_NAME): .prepare
-	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
-	    GOOS=linux GOARCH=arm CGO_ENABLED=1 CC=arm-linux-gnueabi-gcc-10 \
-	    PKG_CONFIG_PATH=/usr/arm-linux-gnueabi/lib/pkgconfig \
-	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_ARM32_S_NAME) cmd/*.go
-	@echo "Created: $(LINUX_ARM32_S_NAME)"
-
-######################################################################
-# Targets for building for Linux/ARM32 with hardware floating point
-######################################################################
-LINUX_ARM32HF_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-arm32hf
-ARM32HF_IMAGE 	     := $(DOCKER_REPO)/$(PROJECT_NAME)-builder-arm32hf:$(DOCKER_VERSION)
-
-.PHONY: linux-arm32hf
-linux-arm32hf: .prepare ## Build Linux/arm32 static binary in Docker container
-	docker build -t $(ARM32HF_IMAGE) -f Dockerfile.arm32hf .
-	docker run --rm \
-	    --volume $(shell pwd):/build/udp-proxy-2020 \
-	    $(ARM32HF_IMAGE)
-
-.PHONY: linux-arm32hf-shell
-linux-arm32hf-shell: .prepare ## SSH into Linux/arm32 build Docker container
-	docker run -it --rm \
-	    --volume $(shell pwd):/build/udp-proxy-2020 \
-	    --entrypoint /bin/bash $(ARM32HF_IMAGE)
-
-.linux-arm32hf: $(LINUX_ARM32HF_S_NAME)
-$(LINUX_ARM32HF_S_NAME): .prepare
-	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
-	    GOOS=linux GOARCH=arm CGO_ENABLED=1 CC=arm-linux-gnueabihf-gcc-10 \
-	    PKG_CONFIG_PATH=/usr/arm-linux-gnueabihf/lib/pkgconfig \
-	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_ARM32HF_S_NAME) cmd/*.go
-	@echo "Created: $(LINUX_ARM32HF_S_NAME)"
 
 ######################################################################
 # Targets for building macOS/Darwin (only valid on macOS)

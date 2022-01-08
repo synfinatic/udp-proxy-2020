@@ -9,9 +9,9 @@ RUN apt-get install -y \
     linux-libc-dev-mips64-cross \
     gccgo-mips64-linux-gnuabi64 \
     cpp-10-mips64-linux-gnuabi64 \
-    golang-1.14-go \
+    golang-1.16-go \
     gccgo-10-mips64-linux-gnuabi64 \
-    libgo14-mips64-cross \
+    libgo16-mips64-cross \
     libgcc-10-dev-mips64-cross \
     libc6-mips64-cross \
     libc6-dev-mips64-cross
@@ -34,4 +34,7 @@ RUN wget -qO - https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz
 # build our app
 FROM libpcap
 WORKDIR /build/udp-proxy-2020
-ENTRYPOINT PATH=/build/bin:/usr/lib/go-1.14/bin:${PATH} GOROOT=/usr/lib/go-1.14 make .linux-mips64
+ENV GOROOT=/usr/lib/go-1.16
+ENV PATH=/build/bin:${GOROOT}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+ENTRYPOINT make .linux-mips64
