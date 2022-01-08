@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## v0.0.9 - 2022-01-10
+
+Added:
+
+ - Linux/ARMv5 support
+
+Changed:
+
+ - Use Go 1.16
+ - Simplify docker images for ARM builds 
+ - --cache-ttl is now 3 hours
+ - ARMv6/v7 now have unique binaries and use hardware floating point
+ - No more "arm32" builds which isn't a real ARM arch
+
 ## v0.0.8 - 2021-11-07
 
 Changed:
