@@ -73,10 +73,11 @@ you:
  * Linux on x86_64 `make linux-amd64` via [Docker](https://www.docker.com)
  * Linux on MIPS64 `make linux-mips64` (Linux/MIPS64 big-endian for Ubiquiti
     USG/EdgeRouter) via Docker
- * Linux on ARM64 `make linux-arm64` (Linux/ARM64 for Ubiquiti UDM/UDM Pro)
-    via Docker
- * Linux on ARM32 `make linux-arm32` via Docker
- * Linux on ARM32 w/ hardware floating point `make linux-arm32hf` via Docker
+ * Linux on ARM `make linux-arm` via Docker:
+    * Linux on ARM64 for Ubiquiti UDM/UDM Pro
+    * Linux on ARMv5 (software floating point)
+    * Linux on ARMv6 (hardware floating point)
+    * Linux on ARMv7 (hardware floating point)
  * FreeBSD 12.2 on x86_64, ARM64/v6/v7 `make freebsd` (pfSense 2.5) via
 [Vagrant](https://www.vagrantup.com) & [VirtualBox](https://www.virtualbox.org)
  * Docker image to run udp-proxy-2020 in docker `make docker`
@@ -101,7 +102,7 @@ Advanced options:
  * `--fixed-ip` -- Hardcode an <interface>@<ipaddr> to always send traffic to.
     Useful for things like OpenVPN in site-to-site mode.
  * `--timeout` -- Number of ms for pcap timeout value. (default is 250ms)
- * `--cachettl` -- Number of seconds to cache IPs for. (default is 90sec)
+ * `--cachettl` -- Number of minutes to cache IPs for. (default is 180min / 3hrs)
     This value may need to be increased if you have problems passing traffic to
     clients on OpenVPN tunnels if you can't use `--fixed-ip` because clients
     don't have a fixed ip.
@@ -169,9 +170,10 @@ udp-proxy-2020 is built for multiple OS and hardware platforms:
 
  * MacOS/Intel x86_64: `darwin-amd64`
  * Linux/Intel x86_64: `linux-amd64`
- * Linux/ARMv8: `linux-arm64` (RasPi 2 V1.2 and above, Ubiquiti UniFi Dream Machine)
- * Linux/ARMv7 (hardware floating point): `linux-arm32hf` (RasPi 2 V1.1 and below)
- * Linux/ARMv7 (software floating point): `linux-arm32`
+ * Linux/ARM64: `linux-arm64` (RasPi 2 V1.2 and above, Ubiquiti UniFi Dream Machine)
+ * Linux/ARMv7 (hardware floating point): `linux-armv7` (RasPi 2 V1.1 and below)
+ * Linux/ARMv6 (hardware floating point): `linux-armv6`
+ * Linux/ARMv5 (software floating point): `linux-armv5`
  * Linux/MIPS64: `linux-mips64` (Ubiquiti USG/EdgeRouter)
  * FreeBSD/Intel x86_64: `freebsd-amd64` (works with pfSense on x86)
  * FreeBSD/ARMv8: `freebsd-arm64` (Netgate SG-1100 & SG-2100)
