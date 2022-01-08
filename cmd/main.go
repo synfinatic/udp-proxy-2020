@@ -34,7 +34,7 @@ func main() {
 	flag.StringSliceVar(&interfaces, "interface", []string{}, "Two or more interfaces to use")
 	flag.StringSliceVar(&_fixed_ip, "fixed-ip", []string{}, "IPs to always send to: iface@ip")
 	flag.Int32SliceVar(&ports, "port", []int32{}, "One or more UDP ports to process")
-	flag.Int64Var(&timeout, "timeout", 250, "Timeout in ms")
+	flag.Int64Var(&timeout, "timeout", 60*60*3, "Timeout in sec")
 	flag.Int64Var(&cachettl, "cachettl", 90, "Client IP cache TTL in sec")
 	flag.BoolVar(&debug, "debug", false, "Enable debugging")
 	flag.StringVar(&logfile, "logfile", "stderr", "Log to file instead of stderr")
@@ -85,7 +85,7 @@ func main() {
 	}
 
 	// handle our timeout
-	to := parseTimeout(timeout)
+	to := parseTimeout(timeout * 1000)
 
 	for _, fip := range _fixed_ip {
 		split := strings.Split(fip, "@")
