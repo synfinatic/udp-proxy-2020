@@ -69,7 +69,7 @@ func main() {
 			delta = fmt.Sprintf(" [%s delta]", Delta)
 			Tag = "Unknown"
 		}
-		fmt.Printf("udp-proxy-2020 Version %s -- Copyright 2020-2021 Aaron Turner\n", Version)
+		fmt.Printf("udp-proxy-2020 Version %s -- Copyright 2020-2022 Aaron Turner\n", Version)
 		fmt.Printf("%s (%s)%s built at %s\n", CommitID, Tag, delta, Buildinfos)
 		os.Exit(0)
 	}
