@@ -40,8 +40,9 @@ include help.mk  # place after ALL target and before all other targets
 
 release: build-release ## Build and sign official release
 	cd dist && shasum -a 256 udp-proxy-2020* | gpg --clear-sign >release.sig
+	@echo "Now run `make docker-release`?"
 
-build-release: clean linux-amd64 linux-mips64 linux-arm64 linux-arm32 linux-arm32hf darwin-amd64 freebsd docker ## Build our release binaries
+build-release: clean linux-amd64 linux-mips64 linux-arm darwin-amd64 freebsd docker ## Build our release binaries
 
 .PHONY: run
 run: cmd/*.go ## build and run udp-proxy-2020 using $UDP_PROXY_2020_ARGS
@@ -146,7 +147,7 @@ freebsd: .vagrant-check ## Build all FreeBSD/pfSense binaries using Vagrant VM
 	vagrant provision && vagrant up && vagrant ssh-config >.vagrant-ssh && \
 		scp -F .vagrant-ssh default:$(PROJECT_NAME)/dist/*freebsd* dist/
 
-freebsd-shell: ## SSH into FreeBSD Vagrant VM
+freebsd-shell: ## Get a shell in FreeBSD Vagrant VM
 	vagrant ssh
 
 freebsd-clean: ## Destroy FreeBSD Vagrant VM
@@ -242,7 +243,7 @@ linux-mips64: .prepare ## Build Linux/MIPS64 static binary in Docker container
 	    $(MIPS64_IMAGE)
 
 .PHONY: linux-mips64-shell
-linux-mips64-shell: .prepare ## SSH into Linux/MIPS64 build Docker container
+linux-mips64-shell: .prepare ## Get a shell in Linux/MIPS64 build Docker container
 	docker run -it --rm \
 	    --volume $(shell pwd):/build/udp-proxy-2020 \
 	    --entrypoint /bin/bash $(MIPS64_IMAGE)
@@ -272,7 +273,7 @@ linux-arm: .prepare ## Build Linux/arm static binaries in Docker container
 	    $(ARM_IMAGE)
 
 .PHONY: linux-arm-shell
-linux-arm-shell: .prepare ## SSH into Linux/arm build Docker container
+linux-arm-shell: .prepare ## Get a shell in Linux/arm build Docker container
 	docker run -it --rm \
 	    --volume $(shell pwd):/build/udp-proxy-2020 \
 	    --entrypoint /bin/bash $(ARM_IMAGE)
@@ -346,5 +347,5 @@ docker-release: docker ## Tag and push docker images Linux AMD64/ARM64
 	    --platform linux/arm64,linux/amd64 \
 	    --push -f Dockerfile .
 
-docker-clean: ## remove all docker build images
-	docker image rm $(ARM64_IMAGE) $(ARM32_IMAGE) $(ARM32HF_IMAGE) $(AMD64_IMAGE) $(MIPS64_IMAGE) || true
+docker-clean: ## Remove all docker build images
+	docker image rm $(ARM_IMAGE) $(AMD64_IMAGE) $(MIPS64_IMAGE) || true
