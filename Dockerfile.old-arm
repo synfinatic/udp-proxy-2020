@@ -1,0 +1,90 @@
+FROM ubuntu:20.04 as base
+ENV DEBIAN_FRONTEND=noninteractive
+
+# base applications
+RUN apt-get update && apt-get install -y tzdata wget make git flex bison
+
+# all our cross compile stuff
+RUN apt-get install -y \
+    golang-1.16-go \
+    sudo \
+    rsync
+#    binutils-arm-linux-gnueabihf \
+#    binutils-arm-linux-gnueabi \
+#    linux-libc-dev-armhf-cross \
+#    linux-libc-dev-armel-cross \
+#    gccgo-10-arm-linux-gnueabihf \
+#    gccgo-10-arm-linux-gnueabi \
+#    gcc-10-arm-linux-gnueabihf \
+#    gcc-10-arm-linux-gnueabi \
+#    libgo16-armhf-cross \
+#    libgo16-armel-cross \
+#    libgcc-10-dev-armhf-cross \
+#    libgcc-10-dev-armel-cross \
+#    libc6-armhf-cross \
+#    libc6-armel-cross \
+#    libc6-dev-armhf-cross \
+#    libc6-dev-armel-cross \
+#    binutils-aarch64-linux-gnu \
+#    linux-libc-dev-arm64-cross \
+#    gccgo-10-aarch64-linux-gnu \
+#    gcc-10-aarch64-linux-gnu \
+#    libgo16-arm64-cross \
+#    libgcc-10-dev-arm64-cross \
+#    libc6-arm64-cross \
+#    libc6-dev-arm64-cross
+
+#RUN mkdir -p /buildhf/bin && cd /buildhf/bin && \
+#    ln -s /usr/bin/arm-linux-gnueabihf-gccgo-10 gccgo && \
+#    ln -s /usr/bin/arm-linux-gnueabihf-gcc-ar-10 ar && \
+#    ln -s /usr/bin/arm-linux-gnueabihf-gcc-ranlib-10 ranlib && \
+#    ln -s /usr/bin/arm-linux-gnueabihf-gcc-10 gcc
+#
+
+#RUN mkdir -p /build64/bin && cd /build64/bin && \
+#    ln -s /usr/bin/aarch64-linux-gnu-gccgo-10 gccgo && \
+#    ln -s /usr/bin/aarch64-linux-gnu-gcc-ar-10 ar && \
+#    ln -s /usr/bin/aarch64-linux-gnu-gcc-ranlib-10 ranlib && \
+#    ln -s /usr/bin/aarch64-linux-gnu-gcc-10 gcc
+
+FROM base as amcfwm
+WORKDIR /build
+RUN  git clone https://github.com/Adamm00/amcfwm.git && \
+    cd amcfwm && \
+    chmod 755 amcfwm.sh && \
+    ./amcfwm.sh install
+RUN cd amcfwm && ./amcfwm.sh repo && ./amcfwm.sh settings bac68 enable
+
+RUN cd amcfwm && ./amcfwm.sh build
+
+RUN ln -s ~/am-toolchains/brcm-arm-hnd /opt/toolchains
+
+
+ENV TOOLCHAIN_BASE_BUILD=/opt/toolchains/crosstools-arm-gcc-5.3-linux-4.1-glibc-2.22-binutils-2.25
+
+RUN mkdir -p /build/bin && cd /build/bin && \
+    ln -s ${TOOLCHAIN_BASE_BUILD}/usr/bin/arm-buildroot-linux-gnueabi-gcc-5.3.0.br_real gcc && \
+    ln -s ${TOOLCHAIN_BASE_BUILD}/usr/bin/arm-buildroot-linux-gnueabi-ar ar && \
+    ln -s ${TOOLCHAIN_BASE_BUILD}/usr/bin/arm-buildroot-linux-gnueabi-ranlib ranlib 
+
+#ENV GCC_PATH=/opt/toolchains/crosstools-arm-gcc-5.3-linux-4.1-glibc-2.22-binutils-2.25/usr/bin
+ENV PATH=/build/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${TOOLCHAIN_BASE_BUILD}/usr/bin:${TOOLCHAIN_BASE_BUILD}/bin
+#ENV LD_LIBRARY_PATH=${LD_LIBRARY}:/opt/toolchains/crosstools-arm-gcc-5.3-linux-4.1-glibc-2.22-binutils-2.25/usr/lib
+
+## build libpcap
+FROM amcfwm as libpcap
+ENV LIBPCAP_VERSION=1.9.1
+WORKDIR /build
+RUN wget -qO - https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz | tar zxf -
+WORKDIR /build/libpcap-${LIBPCAP_VERSION}
+
+RUN CC=gcc BUILD_CC=arm-linux-gcc AR=arm-linux-ar  RANLIB=arm-linux-ranlib \
+    ./configure --build i686-pc-linux-gnu \
+    --host arm-linux-gnueabi --prefix=${TOOLCHAIN_BASE_BUILD} && \
+    make install
+
+FROM libpcap
+WORKDIR /build/udp-proxy-2020
+ENV GOROOT=/usr/lib/go-1.16
+ENV PATH=${PATH}:${GOROOT}/bin
+ENTRYPOINT make .linux-old-arm

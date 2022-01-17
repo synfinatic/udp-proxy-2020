@@ -265,6 +265,22 @@ LINUX_ARMV7_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-armv7
 LINUX_ARM64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-arm64
 ARM_IMAGE 	   := $(DOCKER_REPO)/$(PROJECT_NAME)-builder-arm:$(DOCKER_VERSION)
 
+LINUX_ARMV5_OLD_S_SNAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-linux-2.6.32-arm-armv5
+OLD_ARM_IMAGE 	   := $(DOCKER_REPO)/$(PROJECT_NAME)-builder-old-arm:$(DOCKER_VERSION)
+
+.PHONY: linux-old-arm
+linux-old-arm: .prepare ## Build Linux/arm static binaries in Docker container
+	docker build -t $(OLD_ARM_IMAGE) -f Dockerfile.old-arm .
+	docker run --rm \
+	    --volume $(shell pwd):/build/udp-proxy-2020 \
+	    $(OLD_ARM_IMAGE)
+
+.PHONY: linux-old-arm-shell
+linux-old-arm-shell: .prepare ## Get a shell in Linux/arm build Docker container
+	docker run -it --rm \
+	    --volume $(shell pwd):/build/udp-proxy-2020 \
+	    --entrypoint /bin/bash $(OLD_ARM_IMAGE)
+
 .PHONY: linux-arm
 linux-arm: .prepare ## Build Linux/arm static binaries in Docker container
 	docker build -t $(ARM_IMAGE) -f Dockerfile.arm .
@@ -283,29 +299,44 @@ $(LINUX_ARMV5_S_NAME): .prepare
 	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
 	    GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=1 CC=arm-linux-gnueabi-gcc-10 \
 	    PKG_CONFIG_PATH=/usr/arm-linux-gnueabi/lib/pkgconfig \
-	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_ARMV5_S_NAME) cmd/*.go
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
+	    	-o $(LINUX_ARMV5_S_NAME) cmd/*.go
 	@echo "Created: $(LINUX_ARMV5_S_NAME)"
 
 $(LINUX_ARMV6_S_NAME): .prepare
 	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
 	    GOOS=linux GOARCH=arm GOARM=6 CGO_ENABLED=1 CC=arm-linux-gnueabihf-gcc-10 \
 	    PKG_CONFIG_PATH=/usr/arm-linux-gnueabihf/lib/pkgconfig \
-	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_ARMV6_S_NAME) cmd/*.go
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
+	    	-o $(LINUX_ARMV6_S_NAME) cmd/*.go
 	@echo "Created: $(LINUX_ARMV6_S_NAME)"
 
 $(LINUX_ARMV7_S_NAME): .prepare
 	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
 	    GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=1 CC=arm-linux-gnueabihf-gcc-10 \
 	    PKG_CONFIG_PATH=/usr/arm-linux-gnueabihf/lib/pkgconfig \
-	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_ARMV7_S_NAME) cmd/*.go
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
+	    	-o $(LINUX_ARMV7_S_NAME) cmd/*.go
 	@echo "Created: $(LINUX_ARMV7_S_NAME)"
 
 $(LINUX_ARM64_S_NAME): .prepare
 	LDFLAGS='-l/usr/aarch64-linux-gnu/lib/libpcap.a' \
 	    GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc-10 \
 	    PKG_CONFIG_PATH=/usr/aarch64-linux-gnu/lib/pkgconfig \
-	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_ARM64_S_NAME) cmd/*.go
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
+	    	-o $(LINUX_ARM64_S_NAME) cmd/*.go
 	@echo "Created: $(LINUX_ARM64_S_NAME)"
+
+#	    PKG_CONFIG_PATH=$(TOOLCHAIN_BASE_BUILD)/usr/lib/pkgconfig \
+
+.linux-old-arm: $(LINUX_ARMV5_OLD_S_SNAME)
+$(LINUX_ARMV5_OLD_S_SNAME): .prepare
+	LDFLAGS='-l$(TOOLCHAIN_BASE_BUILD)/lib/libpcap.a' \
+	    GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=1 CC=arm-linux-gcc \
+	    PKG_CONFIG_PATH=$(TOOLCHAIN_BASE_BUILD)/usr/bin/pkgconfig \
+	    go build -x -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
+		-o $(LINUX_ARMV5_OLD_S_SNAME) cmd/*.go
+	@echo "Created: $(LINUX_ARMV5_OLD_S_SNAME)"
 
 ######################################################################
 # Targets for building macOS/Darwin (only valid on macOS)
