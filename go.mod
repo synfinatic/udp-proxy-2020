@@ -7,5 +7,6 @@ require (
 	github.com/google/gopacket v1.1.18
 	github.com/sirupsen/logrus v1.7.0
 	github.com/spf13/pflag v1.0.5
-	golang.org/x/sys v0.0.0-20200930185726-fdedc70b468f // indirect
+	// see: https://github.com/sirupsen/logrus/issues/1275
+	golang.org/x/sys v0.0.0-20210817190340-bfb29a6856f2 // indirect
 )
