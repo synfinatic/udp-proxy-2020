@@ -28,10 +28,4 @@ jobs:
       run: make
 
     - name: Run tests
-      run: make test 
-      
-    - name: Check Go Format
-      run: make test-fmt 
-        
-    - name: Check go.mod is tidy
-      run: make test-tidy
+      run: make test test-fmt test-tidy

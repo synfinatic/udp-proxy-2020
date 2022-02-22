@@ -33,7 +33,7 @@ type Listen struct {
 	outwriter *pcapgo.Writer       // outbound write packet handle
 	timeout   time.Duration        // timeout for loop
 	clientTTL time.Duration        // ttl for client cache
-	sendpkt   chan Send            // channel used to recieve packets we need to send
+	sendpkt   chan Send            // channel used to receive packets we need to send
 	clients   map[string]time.Time // keep track of clients for non-promisc interfaces
 }
 
@@ -255,7 +255,7 @@ func (l *Listen) sendPackets(sndpkt Send) {
 		if len(l.clients) == 0 {
 			log.Debugf("%s: Unable to send packet; no discovered clients", l.iname)
 		}
-		for ip, _ := range l.clients {
+		for ip := range l.clients {
 			dstip := net.ParseIP(ip).To4()
 			if err, bytes := l.sendPacket(sndpkt, dstip, eth, loop, ip4, udp, payload); err != nil {
 				log.Warnf("Unable to send %d bytes from %s out %s: %s",

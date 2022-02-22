@@ -106,7 +106,10 @@ test-tidy: ## Test to make sure go.mod is tidy
 	    exit -1 ; \
 	fi
 
-precheck: test test-fmt test-tidy ## Run all tests that happen in a PR
+precheck: test test-fmt test-tidy lint ## Run all tests that happen in a PR
+
+lint:  ## Run golangci-lint
+	golangci-lint run
 
 ######################################################################
 # Linux targets for building Linux in Docker

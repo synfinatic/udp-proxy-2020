@@ -82,7 +82,7 @@ func main() {
 		log.SetReportCaller(true)
 	}
 
-	if cli.ListInterfaces == true {
+	if cli.ListInterfaces {
 		listInterfaces()
 		os.Exit(0)
 	}
@@ -138,7 +138,6 @@ func main() {
 		var promisc bool = (netif.Flags & net.FlagBroadcast) == 0
 		l := newListener(netif, promisc, cli.Port, to, fixed_ip[iface])
 		listeners = append(listeners, l)
-
 	}
 
 	// init each listener
