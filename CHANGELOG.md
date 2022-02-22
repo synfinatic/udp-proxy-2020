@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## v0.0.9 - Unreleased
+## v0.0.9 - 2022-02-21
 
 Added:
 
