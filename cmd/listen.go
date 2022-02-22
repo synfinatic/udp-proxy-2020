@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/binary"
-	"encoding/hex"
+	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -12,6 +14,7 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
+	"github.com/google/gopacket/pcapgo"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -25,9 +28,12 @@ type Listen struct {
 	ipaddr    string               // dstip we send packets to
 	promisc   bool                 // do we enable promisc on this interface?
 	handle    *pcap.Handle         // gopacket.pcap handle
+	writer    *pcapgo.Writer       // in and outbound write packet handle
+	inwriter  *pcapgo.Writer       // inbound write packet handle
+	outwriter *pcapgo.Writer       // outbound write packet handle
 	timeout   time.Duration        // timeout for loop
 	clientTTL time.Duration        // ttl for client cache
-	sendpkt   chan Send            // channel used to recieve packets we need to send
+	sendpkt   chan Send            // channel used to receive packets we need to send
 	clients   map[string]time.Time // keep track of clients for non-promisc interfaces
 }
 
@@ -94,6 +100,37 @@ func newListener(netif *net.Interface, promisc bool, ports []int32, to time.Dura
 	return new
 }
 
+type Direction string
+
+const (
+	In    Direction = "in"
+	Out   Direction = "out"
+	InOut Direction = "inout"
+)
+
+// OpenWrite will open the write file pcap handle
+func (l *Listen) OpenWriter(path string, dir Direction) (string, error) {
+	var err error
+	fName := fmt.Sprintf("udp-proxy-%s-%s.pcap", dir, l.iname)
+	filePath := filepath.Join(path, fName)
+	f, err := os.Create(filePath)
+	if err != nil {
+		return fName, err
+	}
+	switch dir {
+	case "in":
+		l.inwriter = pcapgo.NewWriter(f)
+		return fName, l.inwriter.WriteFileHeader(65536, l.handle.LinkType())
+	case "out":
+		l.outwriter = pcapgo.NewWriter(f)
+		return fName, l.outwriter.WriteFileHeader(65536, l.handle.LinkType())
+	case "inout":
+		l.writer = pcapgo.NewWriter(f)
+		return fName, l.writer.WriteFileHeader(65536, l.handle.LinkType())
+	}
+	return fName, fmt.Errorf("Invalid direction: %s", dir)
+}
+
 // Our goroutine for processing packets
 func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
 	// add ourself as a sender
@@ -128,6 +165,25 @@ func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
 
 			log.Debugf("%s: received packet and fowarding onto other interfaces", l.iname)
 			s.Send(packet, l.iname, l.handle.LinkType())
+
+			// write to pcap?
+			if l.inwriter != nil {
+				md := packet.Metadata()
+				ci := gopacket.CaptureInfo{
+					Timestamp:      md.Timestamp,
+					CaptureLength:  md.CaptureLength,
+					Length:         md.Length,
+					InterfaceIndex: md.InterfaceIndex,
+					AncillaryData:  md.AncillaryData,
+				}
+				if err := l.inwriter.WritePacket(ci, packet.Data()); err != nil {
+					log.WithError(err).Warnf("Unable to write packet to pcap file")
+				}
+				if err := l.writer.WritePacket(ci, packet.Data()); err != nil {
+					log.WithError(err).Warnf("Unable to write packet to pcap file")
+				}
+			}
+
 		case <-ticker: // our timer
 			log.Debugf("handlePackets(%s) ticker", l.iname)
 			// clean client cache
@@ -190,7 +246,7 @@ func (l *Listen) sendPackets(sndpkt Send) {
 	if !l.promisc {
 		// send one packet to broadcast IP
 		dstip := net.ParseIP(l.ipaddr).To4()
-		if err, bytes := l.sendPacket(dstip, eth, loop, ip4, udp, payload); err != nil {
+		if err, bytes := l.sendPacket(sndpkt, dstip, eth, loop, ip4, udp, payload); err != nil {
 			log.Warnf("Unable to send %d bytes from %s out %s: %s",
 				bytes, sndpkt.srcif, l.iname, err)
 		}
@@ -199,9 +255,9 @@ func (l *Listen) sendPackets(sndpkt Send) {
 		if len(l.clients) == 0 {
 			log.Debugf("%s: Unable to send packet; no discovered clients", l.iname)
 		}
-		for ip, _ := range l.clients {
+		for ip := range l.clients {
 			dstip := net.ParseIP(ip).To4()
-			if err, bytes := l.sendPacket(dstip, eth, loop, ip4, udp, payload); err != nil {
+			if err, bytes := l.sendPacket(sndpkt, dstip, eth, loop, ip4, udp, payload); err != nil {
 				log.Warnf("Unable to send %d bytes from %s out %s: %s",
 					bytes, sndpkt.srcif, l.iname, err)
 			}
@@ -209,7 +265,7 @@ func (l *Listen) sendPackets(sndpkt Send) {
 	}
 }
 
-func (l *Listen) sendPacket(dstip net.IP, eth layers.Ethernet, loop layers.Loopback,
+func (l *Listen) sendPacket(sndpkt Send, dstip net.IP, eth layers.Ethernet, loop layers.Loopback,
 	ip4 layers.IPv4, udp layers.UDP, payload gopacket.Payload) (error, int) {
 	// Build our packet to send
 	buffer := gopacket.NewSerializeBuffer()
@@ -288,8 +344,26 @@ func (l *Listen) sendPacket(dstip net.IP, eth layers.Ethernet, loop layers.Loopb
 	}
 
 	outgoingPacket := buffer.Bytes()
-	log.Debugf("%s => %s: packet len: %d: %s",
-		l.iname, dstip.String(), len(outgoingPacket), hex.EncodeToString(outgoingPacket))
+	log.Debugf("%s => %s: packet len: %d", l.iname, dstip.String(), len(outgoingPacket))
+
+	// write to pcap?
+	if l.outwriter != nil {
+		md := sndpkt.packet.Metadata()
+		ci := gopacket.CaptureInfo{
+			Timestamp:      md.Timestamp,
+			CaptureLength:  len(outgoingPacket),
+			Length:         len(outgoingPacket),
+			InterfaceIndex: md.InterfaceIndex,
+			AncillaryData:  md.AncillaryData,
+		}
+		if err := l.outwriter.WritePacket(ci, outgoingPacket); err != nil {
+			log.WithError(err).Warnf("Unable to write packet to pcap file")
+		}
+		if err := l.writer.WritePacket(ci, outgoingPacket); err != nil {
+			log.WithError(err).Warnf("Unable to write packet to pcap file")
+		}
+	}
+
 	return l.handle.WritePacketData(outgoingPacket), len(outgoingPacket)
 }
 

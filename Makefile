@@ -26,15 +26,9 @@ LDFLAGS            := -X "main.Version=$(PROJECT_VERSION)" -X "main.Delta=$(PROJ
 LDFLAGS            += -X "main.Buildinfos=$(BUILDINFOS)" -X "main.Tag=$(PROJECT_TAG)"
 LDFLAGS            += -X "main.CommitID=$(PROJECT_COMMIT)" -s -w
 OUTPUT_NAME        := $(DIST_DIR)$(PROJECT_NAME)-$(GOOS)-$(GOARCH)
-STR2PCAP_NAME      := $(DIST_DIR)str2pcap-$(PROJECT_VERSION)-$(GOOS)-$(GOARCH)
 DOCKER_VERSION     ?= v$(PROJECT_VERSION)
 
-ALL: $(OUTPUT_NAME) str2pcap ## Build our current str2pcap platform binary
-
-str2pcap: $(STR2PCAP_NAME)
-
-$(STR2PCAP_NAME): str2pcap/*.go
-	go build -o $(STR2PCAP_NAME) str2pcap/*.go
+ALL: $(OUTPUT_NAME)
 
 include help.mk  # place after ALL target and before all other targets
 
@@ -43,6 +37,10 @@ release: build-release ## Build and sign official release
 	@echo "Now run `make docker-release`?"
 
 build-release: clean linux-amd64 linux-mips64 linux-arm darwin-amd64 freebsd docker ## Build our release binaries
+
+tags: cmd/*.go  ## Create tags file for vim, etc
+	@echo Make sure you have Universal Ctags installed: https://github.com/universal-ctags/ctags
+	ctags -R
 
 .PHONY: run
 run: cmd/*.go ## build and run udp-proxy-2020 using $UDP_PROXY_2020_ARGS
@@ -108,7 +106,10 @@ test-tidy: ## Test to make sure go.mod is tidy
 	    exit -1 ; \
 	fi
 
-precheck: test test-fmt test-tidy ## Run all tests that happen in a PR
+precheck: test test-fmt test-tidy lint ## Run all tests that happen in a PR
+
+lint:  ## Run golangci-lint
+	golangci-lint run
 
 ######################################################################
 # Linux targets for building Linux in Docker
@@ -339,7 +340,7 @@ docker-shell: ## Get a shell in the docker image
 	    $(DOCKER_REPO)/$(PROJECT_NAME):$(DOCKER_VERSION) \
 	    /bin/sh
 
-docker-release: docker ## Tag and push docker images Linux AMD64/ARM64
+docker-release: ## Tag and push docker images Linux AMD64/ARM64
 	docker buildx build \
 	    -t $(DOCKER_REPO)/$(PROJECT_NAME):$(DOCKER_VERSION) \
 	    -t $(DOCKER_REPO)/$(PROJECT_NAME):latest \

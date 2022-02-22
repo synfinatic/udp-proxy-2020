@@ -2,11 +2,12 @@
 
 ## Unreleased
 
-## v0.0.9 - 2022-01-10
+## v0.0.9 - Unreleased
 
 Added:
 
  - Linux/ARMv5 support
+ - Add support for writing pcap files for debugging #79
 
 Changed:
 
@@ -15,6 +16,9 @@ Changed:
  - --cache-ttl is now 3 hours
  - ARMv6/v7 now have unique binaries and use hardware floating point
  - No more "arm32" builds which isn't a real ARM arch
+ - Remove str2pcap since we have direct pcap support now
+ - Switch from pflag to Kong for CLI arg parsing
+ - Update to logrus 1.8.1
 
 ## v0.0.8 - 2021-11-07
 
