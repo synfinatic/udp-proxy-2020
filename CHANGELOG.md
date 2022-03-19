@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v0.0.10 - 2022-03-18
+
+Fixed:
+ - Docker container would not start.
+
 ## v0.0.9 - 2022-02-21
 
 Added:
