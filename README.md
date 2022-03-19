@@ -60,6 +60,9 @@ There is also a [docker image available](
 https://hub.docker.com/repository/docker/synfinatic/udp-proxy-2020) for Linux on
 AMD64 and ARM64 (like the Ubiquiti UDM).
 
+Note that for Docker deployments, you should be using [host networking](
+https://docs.docker.com/network/host/).
+
 ## Building udp-proxy-2020
 
 If you are building for the same platform you intend to run `udp-proxy-2020`

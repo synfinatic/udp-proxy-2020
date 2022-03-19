@@ -22,5 +22,6 @@ ENV INTERFACES=""
 ENV TIMEOUT=250
 ENV CACHETTL=90
 ENV EXTRA_ARGS=""
-CMD /usr/local/bin/udp-proxy-2020 --port ${PORTS} --interface ${INTERFACES} \
-    --timeout ${TIMEOUT} --cachettl ${CACHETTL} ${EXTRA_ARGS}
+CMD /usr/local/bin/udp-proxy-2020 --port $PORTS \
+    --interface $INTERFACES --timeout $TIMEOUT \
+    --cache-ttl $CACHETTL $EXTRA_ARGS
