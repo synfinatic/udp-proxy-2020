@@ -159,6 +159,13 @@ func main() {
 		defer listeners[i].handle.Close()
 	}
 
+	// Sink broadcast messages
+	for _, l := range listeners {
+		if err := l.SinkUdpPackets(); err != nil {
+			log.WithError(err).Fatalf("Unable to init SinkUdpPackets")
+		}
+	}
+
 	// start handling packets
 	var wg sync.WaitGroup
 	spf := SendPktFeed{}

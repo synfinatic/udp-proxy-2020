@@ -418,3 +418,48 @@ func isValidLayerType(layertype layers.LinkType) bool {
 	}
 	return false
 }
+
+const MAX_PACKET_SIZE = 8192
+
+// SinkUdpPackets opens a UDP socket for broadcast packets and sends them to /dev/null
+func (l *Listen) SinkUdpPackets() error {
+	addrs, err := l.netif.Addrs()
+	if err != nil {
+		return err
+	}
+
+	for _, addr := range addrs {
+		addrs := addr.String()
+
+		if addrs == "0.0.0.0" || addrs == "" || strings.Contains(addrs, ":") {
+			continue
+		}
+		ipport := strings.Split(addrs, "/")
+		for _, port := range l.ports {
+			udp := net.UDPAddr{
+				IP:   net.ParseIP(ipport[0]),
+				Port: int(port),
+			}
+
+			conn, err := net.ListenUDP("udp4", &udp)
+			if err != nil {
+				return fmt.Errorf("%s:%d: %s", ipport[0], port, err.Error())
+			}
+
+			if err := conn.SetReadBuffer(MAX_PACKET_SIZE); err != nil {
+				return err
+			}
+			go func() {
+				for {
+					buff := make([]byte, MAX_PACKET_SIZE)
+					_, _, err := conn.ReadFromUDP(buff)
+					if err != nil {
+						log.WithError(err).Warnf("Unable to read broadcast packet")
+					}
+					// do nothing with the data
+				}
+			}()
+		}
+	}
+	return nil
+}

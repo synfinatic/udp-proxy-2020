@@ -16,12 +16,17 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
+      - name: Set Env Vars
+        run: |
+          echo "GOARCH=amd64" >> $GITHUB_ENV
+      - name: Install deps
+        run: sudo apt-get update && sudo apt-get install -y libpcap0.8 libpcap0.8-dev
       - uses: actions/checkout@v2
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v2
         with:
           # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
-          version: v1.43.0
+          version: v1.45.2
 
           # Optional: working directory, useful for monorepos
           # working-directory: somedir
