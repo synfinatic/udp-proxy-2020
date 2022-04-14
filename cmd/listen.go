@@ -18,7 +18,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const SendBufferSize = 100
+const (
+	SEND_BUFFER_SIZE = 100
+	MAX_PACKET_SIZE  = 8192
+)
 
 // Struct containing everything for an interface
 type Listen struct {
@@ -93,7 +96,7 @@ func newListener(netif *net.Interface, promisc bool, ports []int32, to time.Dura
 		timeout: to,
 		promisc: promisc,
 		handle:  nil,
-		sendpkt: make(chan Send, SendBufferSize),
+		sendpkt: make(chan Send, SEND_BUFFER_SIZE),
 		clients: clients,
 	}
 	log.Debugf("Listen: %s", spew.Sdump(new))
@@ -419,9 +422,8 @@ func isValidLayerType(layertype layers.LinkType) bool {
 	return false
 }
 
-const MAX_PACKET_SIZE = 8192
-
 // SinkUdpPackets opens a UDP socket for broadcast packets and sends them to /dev/null
+// creates a go-routine for each interface/port combo so we don't block
 func (l *Listen) SinkUdpPackets() error {
 	addrs, err := l.netif.Addrs()
 	if err != nil {
@@ -431,6 +433,7 @@ func (l *Listen) SinkUdpPackets() error {
 	for _, addr := range addrs {
 		addrs := addr.String()
 
+		// skip anything that doesn't look like a unicast IPv4 address
 		if addrs == "0.0.0.0" || addrs == "" || strings.Contains(addrs, ":") {
 			continue
 		}
@@ -449,9 +452,10 @@ func (l *Listen) SinkUdpPackets() error {
 			if err := conn.SetReadBuffer(MAX_PACKET_SIZE); err != nil {
 				return err
 			}
+
 			go func() {
+				buff := make([]byte, MAX_PACKET_SIZE)
 				for {
-					buff := make([]byte, MAX_PACKET_SIZE)
 					_, _, err := conn.ReadFromUDP(buff)
 					if err != nil {
 						log.WithError(err).Warnf("Unable to read broadcast packet")
