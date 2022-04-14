@@ -31,6 +31,7 @@ type CLI struct {
 	PcapPath       string   `kong:"short='d',default='/root',help='Directory to write debug pcap files'"`
 	ListInterfaces bool     `kong:"short='l',help='List available interfaces and exit'"`
 	Version        bool     `kong:"short='v',help='Print version information'"`
+	NoListen       bool     `kong:"help='Do not actively listen on UDP port(s)'"`
 }
 
 func init() {
@@ -160,9 +161,11 @@ func main() {
 	}
 
 	// Sink broadcast messages
-	for _, l := range listeners {
-		if err := l.SinkUdpPackets(); err != nil {
-			log.WithError(err).Fatalf("Unable to init SinkUdpPackets")
+	if !cli.NoListen {
+		for _, l := range listeners {
+			if err := l.SinkUdpPackets(); err != nil {
+				log.WithError(err).Fatalf("Unable to init SinkUdpPackets")
+			}
 		}
 	}
 
