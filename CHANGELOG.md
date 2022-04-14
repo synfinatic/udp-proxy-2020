@@ -2,10 +2,21 @@
 
 ## Unreleased
 
+## v0.0.11 - 2022-04-14
+
+Added:
+ - Now listens on the interfaces/port(s) so that the
+    underlying operating system will not generate ICMP Port Unreachables
+    which fixes Roon on iPhone/etc over VPN. #86
+
+Fixed:
+ - Update golangci-lint to fix linter build errors 
+
 ## v0.0.10 - 2022-03-18
 
 Fixed:
  - Docker container would not start.
+
 
 ## v0.0.9 - 2022-02-21
 
