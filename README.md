@@ -105,17 +105,18 @@ Advanced options:
  * `--fixed-ip` -- Hardcode an <interface>@<ipaddr> to always send traffic to.
     Useful for things like OpenVPN in site-to-site mode.
  * `--timeout` -- Number of ms for pcap timeout value. (default is 250ms)
- * `--cachettl` -- Number of minutes to cache IPs for. (default is 180min / 3hrs)
+ * `--cache-ttl` -- Number of minutes to cache IPs for. (default is 180min / 3hrs)
     This value may need to be increased if you have problems passing traffic to
     clients on OpenVPN tunnels if you can't use `--fixed-ip` because clients
     don't have a fixed ip.
+ * `--no-listen` -- Do not listen on the specified UDP port(s)
 
 There are other flags of course, run `./udp-proxy-2020 --help` for a full list.
 
 Example:
 
 ```sh
-udp-proxy-2020 --port 9003 --interface eth0,eth0.100,eth1,tun0 --cachettl 300
+udp-proxy-2020 --port 9003 --interface eth0,eth0.100,eth1,tun0 --cache-ttl 300
 ```
 
 Would forward udp/9003 packets on four interfaces: eth0, eth1, VLAN100 on eth0 and tun0.
@@ -133,6 +134,23 @@ startup-scripts) directory.  If you figure out how to add support for another
 platform, please send me a pull request!
 
 ## FAQ
+
+## When should I use --no-listen?
+
+Starting with v0.0.11, `udp-proxy-2020` now by default creates a UDP listening 
+socket on the specified `--port`(s).  This prevents the underlying OS from issuing
+ICMP Port Unreachable messages which can break certain clients (noteably the 
+[Roon](https://roonlabs.com) iOS client).
+
+The only time you should need to use the `--no-listen` flag is if there is another
+piece of software (perhaps your Roon Core?) is running on the same host as
+`udp-proxy-2020`.  That should be _very rare_!
+
+## When should I use --pcap and --pcap-path?
+
+These flags are for debugging problems with `udp-proxy-2020`.  You should only
+use these flags when I direct you to do so as part of a [ticket](
+https://github.com/synfinatic/udp-proxy-2020/issues) you have opened for `udp-proxy-2020`.
 
 ### Where can I download precompiled binaries?
 
