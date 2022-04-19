@@ -200,3 +200,13 @@ udp-proxy-2020 is built for multiple OS and hardware platforms:
  * FreeBSD/ARMv8: `freebsd-arm64` (Netgate SG-1100 & SG-2100)
  * FreeBSD/ARMv7: `freebsd-armv7` (Netgate SG-3100)
  * FreeBSD/ARMv6: `freebsd-armv6`
+
+### How can I say thanks?
+
+Honestly, just send me an email saying thanks or "star" this project in GitHub
+is enough thanks.
+
+Occasionally, someone will ask about giving me a few bucks, but I really don't
+need any money.  If you still would like to throw a few bucks my way, I'd much
+rather you donate to [Second Harvest Food Bank](https://www.shfb.org/) which
+is local to me and could put your money to better work than I would.
