@@ -17,6 +17,6 @@ ARGS="*\<arguments passed to udp-proxy-2020\>*"
 
 Typically it will look something like this:
 
-`ARGS="--interface eth0,eth1 --port 9003 --cachettl 300"`
+`ARGS="--interface eth0,eth1 --port 9003"`
 
 For a full list of possible arguments and their meaning, please run: `udp-proxy-2020 -h`
