@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+Added:
+ - Create Debian & RPM packages for x86 and ARM64
+
 ## v0.0.11 - 2022-04-14
 
 Added:

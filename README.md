@@ -45,7 +45,7 @@ Python/Ruby and a bunch of libraries.
 [gopacket/pcapgo](https://gowalker.org/github.com/google/gopacket/pcapgo) only
 supports Linux for reading & writing to (ethernet?) network interfaces.
 
-## Supported Systems
+## Installation & Startup Scripts
 
 Pretty much any Unix-like system is supported because the dependcy list is only
 `libpcap` and `golang`.  I develop on MacOS and specifically target
@@ -53,8 +53,14 @@ Pretty much any Unix-like system is supported because the dependcy list is only
 [Ubiquiti](https://www.ui.com) USG, EdgeRouter and DreamMachine/Pro as those
 are quite common among the Roon user community.
 
-I [release binaries](https://github.com/synfinatic/udp-proxy-2020/releases)
-for Linux, FreeBSD (pfSense) and MacOS for Intel, ARM and MIPS hardware.
+### Packages
+
+If you are using a Linux RedHat or Debian based distro, the easiest way to install
+is grab the appropriate `.rpm` or `.deb` file and install it with your package 
+manager.  Then edit `/etc/udp-proxy-2020.conf` and start via: 
+`systemctl start udp-proxy-2020`.
+
+### Docker
 
 There is also a [docker image available](
 https://hub.docker.com/repository/docker/synfinatic/udp-proxy-2020) for Linux on
@@ -62,6 +68,55 @@ AMD64 and ARM64 (like the Ubiquiti UDM).
 
 Note that for Docker deployments, you should be using [host networking](
 https://docs.docker.com/network/host/).
+
+### Manual
+
+I [release binaries](https://github.com/synfinatic/udp-proxy-2020/releases)
+for Linux, FreeBSD (pfSense) and MacOS for Intel, ARM and MIPS hardware.
+
+There are now instructions and startup scripts available in the [startup-scripts](
+startup-scripts) directory.  If you figure out how to add support for another
+platform, please send me a pull request!
+## Usage
+
+## Configuration
+
+Run `udp-proxy-2020 --help` for a current list of command line options.  
+Also, please note on many operating systems you will need to run it as the 
+`root` user.  Linux systems can optionally grant the `CAP_NET_RAW` capability.
+
+Currently there are only a few flags you probaly need to worry about:
+
+ * `--interface` -- Specify two or more network interfaces to listen on.
+ * `--port` -- Specify one or more UDP ports to monitor.
+ * `--level` -- Specify the log level: [trace|debug|warn|info|error]
+
+Advanced options:
+
+ * `--fixed-ip` -- Hardcode an <interface>@<ipaddr> to always send traffic to.
+    Useful for things like OpenVPN in site-to-site mode.
+ * `--timeout` -- Number of ms for pcap timeout value. (default is 250ms)
+ * `--cache-ttl` -- Number of minutes to cache IPs for. (default is 180min / 3hrs)
+    This value may need to be increased if you have problems passing traffic to
+    clients on OpenVPN tunnels if you can't use `--fixed-ip` because clients
+    don't have a fixed ip.
+ * `--no-listen` -- Do not listen on the specified UDP port(s) to avoid conflicts
+
+There are other flags of course, run `./udp-proxy-2020 --help` for a full list.
+
+Example:
+
+```sh
+udp-proxy-2020 --port 9003 --interface eth0,eth0.100,eth1,tun0 --cache-ttl 300
+```
+
+Would forward udp/9003 packets on four interfaces: eth0, eth1, VLAN100 on eth0 and tun0.
+Client IP's on tun0 would be remembered for 5 minutes once they are learned.
+
+Note: "learning" requires the client to send a udp/9003 message first!  If
+your application requires a message to be sent *to* the client first, then you
+would need to specify `--fixed-ip=1.2.3.4@tun0` where `1.2.3.4` is the IP address
+of the client on tun0.
 
 ## Building udp-proxy-2020
 
@@ -87,51 +142,6 @@ you:
 
 You can get a full list of make targets and basic info about them by running:
 `make help`.
-
-## Usage
-
-Run `udp-proxy-2020 --help` for a current list of command line options.  
-Also, please note on many operating systems you will need to run it as the 
-`root` user.  Linux systems can optionally grant the `CAP_NET_RAW` capability.
-
-Currently there are only a few flags you probaly need to worry about:
-
- * `--interface` -- Specify two or more network interfaces to listen on.
- * `--port` -- Specify one or more UDP ports to monitor.
- * `--debug` -- Enable debugging output.
-
-Advanced options:
-
- * `--fixed-ip` -- Hardcode an <interface>@<ipaddr> to always send traffic to.
-    Useful for things like OpenVPN in site-to-site mode.
- * `--timeout` -- Number of ms for pcap timeout value. (default is 250ms)
- * `--cache-ttl` -- Number of minutes to cache IPs for. (default is 180min / 3hrs)
-    This value may need to be increased if you have problems passing traffic to
-    clients on OpenVPN tunnels if you can't use `--fixed-ip` because clients
-    don't have a fixed ip.
- * `--no-listen` -- Do not listen on the specified UDP port(s)
-
-There are other flags of course, run `./udp-proxy-2020 --help` for a full list.
-
-Example:
-
-```sh
-udp-proxy-2020 --port 9003 --interface eth0,eth0.100,eth1,tun0 --cache-ttl 300
-```
-
-Would forward udp/9003 packets on four interfaces: eth0, eth1, VLAN100 on eth0 and tun0.
-Client IP's on tun0 would be remembered for 5 minutes once they are learned.
-
-Note: "learning" requires the client to send a udp/9003 message first!  If
-your application requires a message to be sent *to* the client first, then you
-would need to specify `--fixed-ip=1.2.3.4@tun0` where `1.2.3.4` is the IP address
-of the client on tun0.
-
-## Installation & Startup Scripts
-
-There are now instructions and startup scripts available in the [startup-scripts](
-startup-scripts) directory.  If you figure out how to add support for another
-platform, please send me a pull request!
 
 ## FAQ
 

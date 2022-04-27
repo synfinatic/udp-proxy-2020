@@ -36,7 +36,7 @@ release: build-release ## Build and sign official release
 	cd dist && shasum -a 256 udp-proxy-2020* | gpg --clear-sign >release.sig
 	@echo "Now run `make docker-release`?"
 
-build-release: clean linux-amd64 linux-mips64 linux-arm darwin-amd64 freebsd docker ## Build our release binaries
+build-release: clean linux-amd64 linux-mips64 linux-arm darwin-amd64 freebsd docker package ## Build our release binaries
 
 tags: cmd/*.go  ## Create tags file for vim, etc
 	@echo Make sure you have Universal Ctags installed: https://github.com/universal-ctags/ctags
@@ -350,3 +350,9 @@ docker-release: ## Tag and push docker images Linux AMD64/ARM64
 
 docker-clean: ## Remove all docker build images
 	docker image rm $(ARM_IMAGE) $(AMD64_IMAGE) $(MIPS64_IMAGE) || true
+
+package: linux-amd64 linux-arm  ## Build deb/rpm packages
+	docker build -t udp-proxy-2020-builder:latest -f Dockerfile.package .
+	docker run --rm \
+		-v $$(pwd)/dist:/root/dist \
+		-e VERSION=$(PROJECT_VERSION) udp-proxy-2020-builder:latest
