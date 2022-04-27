@@ -98,7 +98,7 @@ Currently there are only a few flags you probaly need to worry about:
 
  * `--interface` -- Specify two or more network interfaces to listen on.
  * `--port` -- Specify one or more UDP ports to monitor.
- * `--debug` -- Enable debugging output.
+ * `--level` -- Specify the log level: [trace|debug|warn|info|error]
 
 Advanced options:
 
