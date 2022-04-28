@@ -10,7 +10,7 @@ User=root
 Group=root
 Type=simple
 Restart=on-failure
-ExecStart=/usr/local/bin/udp-proxy-2020 ${ARGS}
+ExecStart=/usr/bin/udp-proxy-2020 $ARGS
 
 LimitNOFILE=10000
 TimeoutStopSec=20
