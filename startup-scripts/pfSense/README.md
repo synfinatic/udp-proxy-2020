@@ -21,7 +21,12 @@ Execute (as root) `service udp-proxy-2020 start`
 
 ## Other info
 
+Things to keep in mind:
+
+ * Tested to work with both Wiregard and OpenVPN on pfSense 2.6.0
+ * You may need to ssh into your firewall and run `ifconfig` to get the name of the VPN interface
+
 Additional commands:
 
  * Stop the service: `service udp-proxy-2020 stop`  
- * Check status of the service: `service udp-proxy-2020 status`  
+ * Check status of the service: `service udp-proxy-2020 status`
