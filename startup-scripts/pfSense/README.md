@@ -10,7 +10,7 @@ Note that these config files now support pfSense v2.5.0
  1. Copy over [/usr/local/etc/rc.d/udp-proxy-2020](usr/local/etc/rc.d/udp-proxy-2020)
  1. Copy the correct [udp-proxy-2020 binary](
     https://github.com/synfinatic/udp-proxy-2020/releases) for your system to 
-    `/usr/local/bin/udp-proxy-2020`
+    `/usr/local/bin/udp-proxy-2020` (yes, you have to rename the file!)
  1. Ensure that `/usr/local/bin/udp-proxy-2020` and 
     `/usr/local/etc/rc.d/udp-proxy-2020` have the correct permissions by running
     `chmod 755 <file>`
