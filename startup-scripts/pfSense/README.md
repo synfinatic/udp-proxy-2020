@@ -4,16 +4,18 @@ Note that these config files now support pfSense v2.5.0
 
 ## Configuration
 
+ 1. Add the line `udp_proxy_2020_enable=YES` to [/etc/rc.conf.local](etc/rc.conf.local)
+    (file may need to be created)
  1. Create [/usr/local/etc/udp-proxy-2020.conf](usr/local/etc/udp-proxy-2020.conf)
     on your firewall and edit as necessary for your needs.
- 2. Copy over [/usr/local/etc/rc.d/udp-proxy-2020](usr/local/etc/rc.d/udp-proxy-2020)
- 3. Copy the correct [udp-proxy-2020 binary](
-    https://github.com/synfinatic/udp-proxy-2020/releases) for your system to 
+ 1. Copy over [/usr/local/etc/rc.d/udp-proxy-2020](usr/local/etc/rc.d/udp-proxy-2020)
+ 1. Copy the correct [udp-proxy-2020 binary](
+    https://github.com/synfinatic/udp-proxy-2020/releases) for your system to
     `/usr/local/bin/udp-proxy-2020` (yes, you have to rename the file!)
- 4. Ensure that `/usr/local/bin/udp-proxy-2020` and 
+ 1. Ensure that `/usr/local/bin/udp-proxy-2020` and
     `/usr/local/etc/rc.d/udp-proxy-2020` have the correct permissions by running:
     `chmod 755 /usr/local/etc/rc.d/udp-proxy-2020 /usr/local/bin/udp-proxy-2020`
- 5. If you want the service to auto-start on boot, in the pfSense webui:
+ 1. If you want the service to auto-start on boot, in the pfSense webui:
      1. If necessary, install the `shellcmd` package (`System -> Package Manager`)
      2. Navigate to: `Services -> Shellcmd`
      3. Click `Add` and fill out the form:
@@ -35,7 +37,7 @@ Things to keep in mind:
 
 Additional commands:
 
- * Stop the service: `service udp-proxy-2020 stop`  
+ * Stop the service: `service udp-proxy-2020 stop` 
  * Check status of the service: `service udp-proxy-2020 status`
 
 
