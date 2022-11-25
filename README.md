@@ -195,6 +195,38 @@ So I haven't done this myself, but Bart Verhoeven over on the Roon Community
 forums wrote up
 [this really detailed how to](https://community.roonlabs.com/t/how-to-roon-mobile-over-wireguard-on-a-unifi-usg/124477).
 
+### How about just on a Ubiquiti UXG-Pro?
+
+On your UXG-Pro run the following (example, for educational purposes only) commands. Please note you should customize at least the INTERFACES variable in the script.
+    
+```bash
+curl -fLSs https://raw.githubusercontent.com/unifi-utilities/uxg-boot/master/install.sh | sh
+cat > /mnt/data/on_boot.d/50-udp-proxy.sh <<ScriptContent
+#!/bin/sh
+
+ARG1=${1:-run}
+
+if [ "$ARG1" = "clean" ]; then
+    podman stop udp-proxy
+    podman container exists udp-proxy && podman container rm udp-proxy
+    exit
+fi
+
+export INTERFACES="br100,br300,br4040"
+export PORT="9003"
+export CACHETTL="300"
+export EXTRA_ARGS=""
+
+podman container exists udp-proxy || podman create --detach --log-opt max-size=10mb --name udp-proxy --network host --restart always --env 'INTERFACES' --env 'PORT' --env 'CACHETTL' --env 'EXTRA_ARGS' synfinatic/udp-proxy-2020:latest
+podman start udp-proxy
+ScriptContent
+
+chmod +x /mnt/data/on_boot.d/50-udp-proxy.sh
+/mnt/data/on_boot.d/50-udp-proxy.sh
+```
+
+That should be it if you setup the interfaces correctly.
+
 ### What binary is right for me?
 
 udp-proxy-2020 is built for multiple OS and hardware platforms:
