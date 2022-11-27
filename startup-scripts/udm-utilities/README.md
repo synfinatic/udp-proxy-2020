@@ -9,7 +9,11 @@ broadcast/multicast  messages across VLANs and VPN connections.  Useful for
 ## Requirements
 
  * You have successfully configured udm-utilities as described
-    [here](https://github.com/boostchicken/udm-utilities/tree/master/on-boot-script)
+    [here](https://github.com/unifi-utilities/unifios-utilities/tree/main/on-boot-script)
+
+Note that you should follow the
+[uxg-boot](https://github.com/unifi-utilities/uxg-boot) instructions for the
+UXG-Pro.
 
 ## Customization
 
@@ -31,5 +35,5 @@ while the `EXTRA_VARS` variable should be a single string in quotes.
  1. Edit `udp-proxy-2020.conf` for your needs.
  1. Copy modified `udp-proxy-2020.conf` in `/mnt/data/udp-proxy-2020`
  1. Copy [40-udp-proxy-2020.sh](on_boot.d/40-udp-proxy-2020.sh) to
-    `/mnt/data/on_boot.d`
+    `/mnt/data/on_boot.d` and make sure it's executable.
  1. Execute `/mnt/data/on_boot.d/40-udp-proxy-2020.sh`
