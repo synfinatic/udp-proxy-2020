@@ -27,7 +27,7 @@ if [ -z "$CACHETTL" ]; then
 fi
 
 if [ "$ARG1" = "clean" ]; then
-    if podmain container exists ${CONTAINER}; then
+    if podman container exists ${CONTAINER}; then
         podman stop ${CONTAINER}
         podman container rm ${CONTAINER}
     fi
