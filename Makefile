@@ -55,15 +55,15 @@ clean-go: ## Clean Go cache
 	go clean -i -r -cache -modcache
 
 $(OUTPUT_NAME): cmd/*.go .prepare
-	go build -ldflags='$(LDFLAGS)' -o $(OUTPUT_NAME) cmd/*.go
+	go build -ldflags='$(LDFLAGS)' -o $(OUTPUT_NAME) ./cmd
 	@echo "Created: $(OUTPUT_NAME)"
 
 .PHONY: build-race
 build-race: .prepare ## Build race detection binary
-	go build -race -ldflags='$(LDFLAGS)' -o $(OUTPUT_NAME) cmd/*.go
+	go build -race -ldflags='$(LDFLAGS)' -o $(OUTPUT_NAME) ./cmd
 
 debug: .prepare ## Run debug in dlv
-	dlv debug cmd/*.go
+	dlv debug ./cmd
 
 .PHONY: unittest
 unittest: ## Run go unit tests
@@ -133,7 +133,7 @@ linux-amd64-shell: ## Get a shell in Linux/x86_64 Docker container
 .linux-amd64: $(LINUX_AMD64_S_NAME)
 $(LINUX_AMD64_S_NAME): .prepare
 	LDFLAGS='-l/usr/lib/libpcap.a' CGO_ENABLED=1 \
-	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_AMD64_S_NAME) cmd/*.go
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_AMD64_S_NAME) ./cmd
 	@echo "Created: $(LINUX_AMD64_S_NAME)"
 
 ######################################################################

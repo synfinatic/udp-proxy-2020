@@ -4,6 +4,7 @@
 
 Added:
  - Create Debian & RPM packages for x86 and ARM64
+ - Update dependencies with security vulns
 
 ## v0.0.11 - 2022-04-14
 
