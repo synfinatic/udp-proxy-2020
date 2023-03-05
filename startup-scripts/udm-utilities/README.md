@@ -20,7 +20,7 @@ according to your needs.
     VLAN sub-interfaces you want to forward traffic on and set `INTERFACES`.
  1. Figure out what UDP ports you want forwarded and set `PORTS`.
  1. For more advanced configs, [read the udp-proxy-2020 docs](
-    https://github.com/synfinatic/udp-proxy-2020/README.md)
+    https://github.com/synfinatic/udp-proxy-2020/)
 
 Note that both `INTERFACES` and `PORTS` support multiple values separated by commas
 while the `EXTRA_VARS` variable should be a single string in quotes.
