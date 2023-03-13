@@ -5,7 +5,7 @@ services:
     environment:
       - PORTS=9003
       - INTERFACES=eth0,eth1
-      - EXTRA_ARGS="--debug"
+      - EXTRA_ARGS=-L debug
       - TIMEOUT=250
       - CACHETTL=90
     restart: always
