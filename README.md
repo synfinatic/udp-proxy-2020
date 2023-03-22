@@ -145,7 +145,7 @@ You can get a full list of make targets and basic info about them by running:
 
 ## FAQ
 
-## When should I use --no-listen?
+### When should I use --no-listen?
 
 Starting with v0.0.11, `udp-proxy-2020` now by default creates a UDP listening 
 socket on the specified `--port`(s).  This prevents the underlying OS from issuing
@@ -153,10 +153,15 @@ ICMP Port Unreachable messages which can break certain clients (noteably the
 [Roon](https://roonlabs.com) iOS client).
 
 The only time you should need to use the `--no-listen` flag is if there is another
-piece of software (perhaps your Roon Core?) is running on the same host as
-`udp-proxy-2020`.  That should be _very rare_!
+piece of software that is running on the same host as `udp-proxy-2020`.  That 
+should be _very rare_!
 
-## When should I use --pcap and --pcap-path?
+### Does udp-proxy-2020 support running on the same host as Roon/etc?
+
+Not without virtualization tricks.  Basically, packets sent by `udp-proxy-2020`
+will not be seen by other local processes/services like Roon- only remote systems.
+
+### When should I use --pcap and --pcap-path?
 
 These flags are for debugging problems with `udp-proxy-2020`.  You should only
 use these flags when I direct you to do so as part of a [ticket](
