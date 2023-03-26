@@ -24,12 +24,13 @@ type CLI struct {
 	Port           []int32  `kong:"short='p',help='One or more UDP ports to process'"`
 	Timeout        int64    `kong:"short='t',default=250,help='Timeout in msec'"`
 	CacheTTL       int64    `kong:"short='T',default=180,help='Client IP cache TTL in minutes'"`
+	LocalDelivery  bool     `kong:"short='l',help='Deliver packets locally over loopback'"`
 	Level          string   `kong:"short='L',default='info',enum='trace,debug,info,warn,error',help='Log level [trace|debug|info|warn|error]'"`
 	LogLines       bool     `kong:"help='Print line number in logs'"`
 	Logfile        string   `kong:"default='stderr',help='Write logs to filename'"`
 	Pcap           bool     `kong:"short='P',help='Generate pcap files for debugging'"`
 	PcapPath       string   `kong:"short='d',default='/root',help='Directory to write debug pcap files'"`
-	ListInterfaces bool     `kong:"short='l',help='List available interfaces and exit'"`
+	ListInterfaces bool     `kong:"help='List available interfaces and exit'"`
 	Version        bool     `kong:"short='v',help='Print version information'"`
 	NoListen       bool     `kong:"help='Do not actively listen on UDP port(s)'"`
 }
@@ -44,7 +45,99 @@ func init() {
 }
 
 func main() {
+	cli := parseArgs()
+
+	// handle our timeout
+	timeout := parseTimeout(cli.Timeout)
+
+	var fixed_ip = map[string][]string{}
+	for _, fip := range cli.FixedIp {
+		split := strings.Split(fip, "@")
+		if len(split) != 2 {
+			log.Fatalf("--fixed-ip %s is not in the correct format of <interface>@<ip>", fip)
+		}
+		if net.ParseIP(split[1]) == nil {
+			log.Fatalf("--fixed-ip %s IP address is not a valid IPv4 address", fip)
+		}
+		if !stringInSlice(split[0], cli.Interface) {
+			log.Fatalf("--fixed-ip %s interface must be specified via --interface", fip)
+		}
+		fixed_ip[split[0]] = append(fixed_ip[split[0]], split[1])
+	}
+
+	// create our Listeners
+	var seenInterfaces = []string{}
+	var listeners = []Listen{}
+	for _, iface := range cli.Interface {
+		// check for duplicates
+		if stringPrefixInSlice(iface, seenInterfaces) {
+			log.Fatalf("Can't specify the same interface (%s) multiple times", iface)
+		}
+		seenInterfaces = append(seenInterfaces, iface)
+
+		netif, err := net.InterfaceByName(iface)
+		if err != nil {
+			log.WithError(err).Fatalf("Unable to find interface: %s", iface)
+		}
+
+		var promisc bool = (netif.Flags & net.FlagBroadcast) == 0
+		l := newListener(netif, promisc, false, cli.Port, timeout, fixed_ip[iface])
+		listeners = append(listeners, l)
+	}
+
+	if cli.LocalDelivery {
+		// Create loopback listener
+		netif, err := net.InterfaceByName(getLoopback())
+		if err != nil {
+			log.WithError(err).Fatalf("Unable to find loopback interface")
+		}
+
+		l := newListener(netif, false, true, cli.Port, timeout, []string{"127.0.0.1"})
+		listeners = append(listeners, l)
+	}
+
+	// init each listener
+	ttl, _ := time.ParseDuration(fmt.Sprintf("%dm", cli.CacheTTL))
+	for i := range listeners {
+		initializeInterface(&listeners[i])
+		if cli.Pcap {
+			if fName, err := listeners[i].OpenWriter(cli.PcapPath, In); err != nil {
+				log.Fatalf("Unable to open pcap file %s: %s", fName, err.Error())
+			}
+			if fName, err := listeners[i].OpenWriter(cli.PcapPath, Out); err != nil {
+				log.Fatalf("Unable to open pcap file %s: %s", fName, err.Error())
+			}
+			if fName, err := listeners[i].OpenWriter(cli.PcapPath, InOut); err != nil {
+				log.Fatalf("Unable to open pcap file %s: %s", fName, err.Error())
+			}
+		}
+		listeners[i].clientTTL = ttl
+		defer listeners[i].handle.Close()
+	}
+
+	// Sink broadcast messages
+	if !cli.NoListen {
+		for _, l := range listeners {
+			if err := l.SinkUdpPackets(); err != nil {
+				log.WithError(err).Fatalf("Unable to init SinkUdpPackets")
+			}
+		}
+	}
+
+	// start handling packets
+	var wg sync.WaitGroup
+	spf := SendPktFeed{}
+	log.Debug("Initialization complete!")
+	for i := range listeners {
+		wg.Add(1)
+		go listeners[i].handlePackets(&spf, &wg)
+	}
+	wg.Wait()
+}
+
+func parseArgs() CLI {
 	cli := CLI{}
+
 	parser := kong.Must(
 		&cli,
 		kong.Name("udp-proxy-2020"),
@@ -103,79 +196,5 @@ func main() {
 		log.SetOutput(file)
 	}
 
-	// handle our timeout
-	to := parseTimeout(cli.Timeout)
-
-	var fixed_ip = map[string][]string{}
-	for _, fip := range cli.FixedIp {
-		split := strings.Split(fip, "@")
-		if len(split) != 2 {
-			log.Fatalf("--fixed-ip %s is not in the correct format of <interface>@<ip>", fip)
-		}
-		if net.ParseIP(split[1]) == nil {
-			log.Fatalf("--fixed-ip %s IP address is not a valid IPv4 address", fip)
-		}
-		if !stringInSlice(split[0], cli.Interface) {
-			log.Fatalf("--fixed-ip %s interface must be specified via --interface", fip)
-		}
-		fixed_ip[split[0]] = append(fixed_ip[split[0]], split[1])
-	}
-
-	// create our Listeners
-	var seenInterfaces = []string{}
-	var listeners = []Listen{}
-	for _, iface := range cli.Interface {
-		// check for duplicates
-		if stringPrefixInSlice(iface, seenInterfaces) {
-			log.Fatalf("Can't specify the same interface (%s) multiple times", iface)
-		}
-		seenInterfaces = append(seenInterfaces, iface)
-
-		netif, err := net.InterfaceByName(iface)
-		if err != nil {
-			log.Fatalf("Unable to find interface: %s: %s", iface, err)
-		}
-
-		var promisc bool = (netif.Flags & net.FlagBroadcast) == 0
-		l := newListener(netif, promisc, cli.Port, to, fixed_ip[iface])
-		listeners = append(listeners, l)
-	}
-
-	// init each listener
-	ttl, _ := time.ParseDuration(fmt.Sprintf("%dm", cli.CacheTTL))
-	for i := range listeners {
-		initializeInterface(&listeners[i])
-		if cli.Pcap {
-			if fName, err := listeners[i].OpenWriter(cli.PcapPath, In); err != nil {
-				log.Fatalf("Unable to open pcap file %s: %s", fName, err.Error())
-			}
-			if fName, err := listeners[i].OpenWriter(cli.PcapPath, Out); err != nil {
-				log.Fatalf("Unable to open pcap file %s: %s", fName, err.Error())
-			}
-			if fName, err := listeners[i].OpenWriter(cli.PcapPath, InOut); err != nil {
-				log.Fatalf("Unable to open pcap file %s: %s", fName, err.Error())
-			}
-		}
-		listeners[i].clientTTL = ttl
-		defer listeners[i].handle.Close()
-	}
-
-	// Sink broadcast messages
-	if !cli.NoListen {
-		for _, l := range listeners {
-			if err := l.SinkUdpPackets(); err != nil {
-				log.WithError(err).Fatalf("Unable to init SinkUdpPackets")
-			}
-		}
-	}
-
-	// start handling packets
-	var wg sync.WaitGroup
-	spf := SendPktFeed{}
-	log.Debug("Initialization complete!")
-	for i := range listeners {
-		wg.Add(1)
-		go listeners[i].handlePackets(&spf, &wg)
-	}
-	wg.Wait()
+	return cli
 }

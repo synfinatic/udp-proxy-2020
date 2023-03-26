@@ -136,7 +136,7 @@ you:
     * Linux on ARMv5 (software floating point)
     * Linux on ARMv6 (hardware floating point)
     * Linux on ARMv7 (hardware floating point)
- * FreeBSD 12.2 on x86_64, ARM64/v6/v7 `make freebsd` (pfSense 2.5) via
+ * FreeBSD 12.3 on x86_64, ARM64//v7 `make freebsd` (pfSense 2.6) via
 [Vagrant](https://www.vagrantup.com) & [VirtualBox](https://www.virtualbox.org)
  * Docker image to run udp-proxy-2020 in docker `make docker`
 
@@ -153,17 +153,16 @@ ICMP Port Unreachable messages which can break certain clients (noteably the
 [Roon](https://roonlabs.com) iOS client).
 
 The only time you should need to use the `--no-listen` flag is if there is another
-piece of software that is running on the same host as `udp-proxy-2020`.  That 
-should be _very rare_!
+piece of software that is running on the same host as `udp-proxy-2020`.
 
 ### Does udp-proxy-2020 support running on the same host as Roon/etc?
 
-Not without virtualization tricks.  Basically, packets sent by `udp-proxy-2020`
-will not be seen by other local processes/services like Roon- only remote systems.
+As of v0.1.0, yes.  You need to specify `--local-delivery` and `--no-listen` 
+options so that it delivers packets via the loopback interface.
 
 ### When should I use --pcap and --pcap-path?
 
-These flags are for debugging problems with `udp-proxy-2020`.  You should only
+These flags are for debugging problems with `udp-proxy-2020`.  You should
 use these flags when I direct you to do so as part of a [ticket](
 https://github.com/synfinatic/udp-proxy-2020/issues) you have opened for `udp-proxy-2020`.
 
@@ -214,7 +213,6 @@ udp-proxy-2020 is built for multiple OS and hardware platforms:
  * FreeBSD/Intel x86_64: `freebsd-amd64` (works with pfSense on x86)
  * FreeBSD/ARMv8: `freebsd-arm64` (Netgate SG-1100 & SG-2100)
  * FreeBSD/ARMv7: `freebsd-armv7` (Netgate SG-3100)
- * FreeBSD/ARMv6: `freebsd-armv6`
 
 ### How can I say thanks?
 
