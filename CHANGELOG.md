@@ -5,11 +5,13 @@
 Added:
  - Create Debian & RPM packages for x86 and ARM64
  - Update dependencies with security vulns
+ - Add `--local-delivery` option for when Roon runs on the same host
 
 Changed:
  - armv6 is no longer supported by FreeBSD as of 2022.11.21 
  - update source tree to be more Go standard
  - Go v1.18
+ - `-l` is now short for `--local-delivery`
 
 ## v0.0.11 - 2022-04-14
 

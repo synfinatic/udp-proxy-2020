@@ -34,6 +34,7 @@ type Listen struct {
 	writer    *pcapgo.Writer       // in and outbound write packet handle
 	inwriter  *pcapgo.Writer       // inbound write packet handle
 	outwriter *pcapgo.Writer       // outbound write packet handle
+	sendOnly  bool                 // Only send on this interface
 	localIP   net.IP               // the local interface IP
 	timeout   time.Duration        // timeout for loop
 	clientTTL time.Duration        // ttl for client cache
@@ -50,7 +51,7 @@ var validLinkTypes = []layers.LinkType{
 }
 
 // Creates a Listen struct for the given interface, promisc mode, udp sniff ports and timeout
-func newListener(netif *net.Interface, promisc bool, ports []int32, to time.Duration, fixed_ip []string) Listen {
+func newListener(netif *net.Interface, promisc, sendOnly bool, ports []int32, to time.Duration, fixed_ip []string) Listen {
 	var localip net.IP
 
 	log.Debugf("%s: ifIndex: %d", netif.Name, netif.Index)
@@ -92,16 +93,17 @@ func newListener(netif *net.Interface, promisc bool, ports []int32, to time.Dura
 	}
 
 	new := Listen{
-		iname:   netif.Name,
-		netif:   netif,
-		localIP: localip,
-		ports:   ports,
-		ipaddr:  bcastaddr,
-		timeout: to,
-		promisc: promisc,
-		handle:  nil,
-		sendpkt: make(chan Send, SEND_BUFFER_SIZE),
-		clients: clients,
+		iname:    netif.Name,
+		netif:    netif,
+		localIP:  localip,
+		sendOnly: sendOnly,
+		ports:    ports,
+		ipaddr:   bcastaddr,
+		timeout:  to,
+		promisc:  promisc,
+		handle:   nil,
+		sendpkt:  make(chan Send, SEND_BUFFER_SIZE),
+		clients:  clients,
 	}
 
 	log.Debugf("Listen: %s", spew.Sdump(new))
@@ -158,6 +160,11 @@ func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
 		case s := <-l.sendpkt: // packet arrived from another interface
 			l.sendPackets(s)
 		case packet := <-packets: // packet arrived on this interfaces
+			// ignore packets on this interface??
+			if l.sendOnly {
+				continue
+			}
+
 			// is it legit?
 			if packet.NetworkLayer() == nil || packet.TransportLayer() == nil || packet.TransportLayer().LayerType() != layers.LayerTypeUDP {
 				log.Warnf("%s: Invalid packet", l.iname)

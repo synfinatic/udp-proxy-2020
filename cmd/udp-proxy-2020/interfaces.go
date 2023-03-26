@@ -100,3 +100,16 @@ func listInterfaces() {
 		fmt.Printf("\n")
 	}
 }
+
+// getLoopback returns the name of the loopback interface
+func getLoopback() string {
+	getConfiguredInterfaces()
+	for k, v := range Interfaces {
+		for _, a := range v.Addresses {
+			if a.IP.String() == "127.0.0.1" {
+				return k
+			}
+		}
+	}
+	return "No Loopback Interface"
+}
