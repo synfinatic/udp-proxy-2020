@@ -34,6 +34,7 @@ type Listen struct {
 	writer    *pcapgo.Writer       // in and outbound write packet handle
 	inwriter  *pcapgo.Writer       // inbound write packet handle
 	outwriter *pcapgo.Writer       // outbound write packet handle
+	localIP   net.IP               // the local interface IP
 	timeout   time.Duration        // timeout for loop
 	clientTTL time.Duration        // ttl for client cache
 	sendpkt   chan Send            // channel used to receive packets we need to send
@@ -50,6 +51,8 @@ var validLinkTypes = []layers.LinkType{
 
 // Creates a Listen struct for the given interface, promisc mode, udp sniff ports and timeout
 func newListener(netif *net.Interface, promisc bool, ports []int32, to time.Duration, fixed_ip []string) Listen {
+	var localip net.IP
+
 	log.Debugf("%s: ifIndex: %d", netif.Name, netif.Index)
 	addrs, err := netif.Addrs()
 	if err != nil {
@@ -91,6 +94,7 @@ func newListener(netif *net.Interface, promisc bool, ports []int32, to time.Dura
 	new := Listen{
 		iname:   netif.Name,
 		netif:   netif,
+		localIP: localip,
 		ports:   ports,
 		ipaddr:  bcastaddr,
 		timeout: to,
@@ -99,6 +103,7 @@ func newListener(netif *net.Interface, promisc bool, ports []int32, to time.Dura
 		sendpkt: make(chan Send, SEND_BUFFER_SIZE),
 		clients: clients,
 	}
+
 	log.Debugf("Listen: %s", spew.Sdump(new))
 	return new
 }
@@ -201,24 +206,19 @@ func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
 	}
 }
 
-// Does the heavy lifting of editing & sending the packet onwards
-func (l *Listen) sendPackets(sndpkt Send) {
-	var eth layers.Ethernet
-	var loop layers.Loopback // BSD NULL/Loopback used for OpenVPN tunnels/etc
-	var ip4 layers.IPv4      // we only support v4
-	var udp layers.UDP
-	var payload gopacket.Payload
+func (l *Listen) decodePacket(sndpkt Send, eth *layers.Ethernet, loop *layers.Loopback,
+	ip4 *layers.IPv4, udp *layers.UDP, payload *gopacket.Payload) bool {
 	var parser *gopacket.DecodingLayerParser
 
 	log.Debugf("processing packet from %s on %s", sndpkt.srcif, l.iname)
 
 	switch sndpkt.linkType.String() {
 	case layers.LinkTypeNull.String(), layers.LinkTypeLoop.String():
-		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeLoopback, &loop, &ip4, &udp, &payload)
+		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeLoopback, loop, ip4, udp, payload)
 	case layers.LinkTypeEthernet.String():
-		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &eth, &ip4, &udp, &payload)
+		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, eth, ip4, udp, payload)
 	case layers.LinkTypeRaw.String():
-		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeIPv4, &ip4, &udp, &payload)
+		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeIPv4, ip4, udp, payload)
 	default:
 		log.Fatalf("Unsupported source linktype: %s", sndpkt.linkType.String())
 	}
@@ -227,7 +227,7 @@ func (l *Listen) sendPackets(sndpkt Send) {
 	decoded := []gopacket.LayerType{}
 	if err := parser.DecodeLayers(sndpkt.packet.Data(), &decoded); err != nil {
 		log.Warnf("Unable to decode packet from %s: %s", sndpkt.srcif, err)
-		return
+		return false
 	}
 
 	// was packet decoded?  In theory, this should never happen because our BPF filter...
@@ -243,6 +243,22 @@ func (l *Listen) sendPackets(sndpkt Send) {
 	}
 	if !found_udp || !found_ipv4 {
 		log.Warnf("Packet from %s did not contain a IPv4/UDP packet", sndpkt.srcif)
+		return false
+	}
+
+	return true
+}
+
+// Does the heavy lifting of editing & sending the packet onwards
+func (l *Listen) sendPackets(sndpkt Send) {
+	var eth layers.Ethernet
+	var loop layers.Loopback // BSD NULL/Loopback used for OpenVPN tunnels/etc
+	var ip4 layers.IPv4      // we only support v4
+	var udp layers.UDP
+	var payload gopacket.Payload
+
+	if decoded := l.decodePacket(sndpkt, &eth, &loop, &ip4, &udp, &payload); !decoded {
+		// unable to decode packet, ignore it
 		return
 	}
 
@@ -268,19 +284,14 @@ func (l *Listen) sendPackets(sndpkt Send) {
 	}
 }
 
-func (l *Listen) sendPacket(sndpkt Send, dstip net.IP, eth layers.Ethernet, loop layers.Loopback,
-	ip4 layers.IPv4, udp layers.UDP, payload gopacket.Payload) (error, int) {
+func (l *Listen) buildPacket(sndpkt Send, dstip net.IP, eth layers.Ethernet, loop layers.Loopback,
+	ip4 layers.IPv4, udp layers.UDP, payload gopacket.Payload, opts gopacket.SerializeOptions) gopacket.SerializeBuffer {
 	// Build our packet to send
 	buffer := gopacket.NewSerializeBuffer()
 	csum_opts := gopacket.SerializeOptions{
 		FixLengths:       false,
 		ComputeChecksums: true, // only works for IPv4
 	}
-	opts := gopacket.SerializeOptions{
-		FixLengths:       false,
-		ComputeChecksums: false,
-	}
-
 	// UDP payload
 	if err := payload.SerializeTo(buffer, opts); err != nil {
 		log.Fatalf("can't serialize payload: %s", spew.Sdump(payload))
@@ -319,6 +330,16 @@ func (l *Listen) sendPacket(sndpkt Send, dstip net.IP, eth layers.Ethernet, loop
 	if err := new_ip4.SerializeTo(buffer, csum_opts); err != nil {
 		log.Fatalf("can't serialize IP header: %s", spew.Sdump(new_ip4))
 	}
+	return buffer
+}
+
+func (l *Listen) sendPacket(sndpkt Send, dstip net.IP, eth layers.Ethernet, loop layers.Loopback,
+	ip4 layers.IPv4, udp layers.UDP, payload gopacket.Payload) (error, int) {
+	opts := gopacket.SerializeOptions{
+		FixLengths:       false,
+		ComputeChecksums: false,
+	}
+	buffer := l.buildPacket(sndpkt, dstip, eth, loop, ip4, udp, payload, opts)
 
 	// Add our L2 header to the buffer
 	switch l.handle.LinkType().String() {

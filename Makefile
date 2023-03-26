@@ -4,7 +4,7 @@ GOARCH ?= $(shell uname -m | sed -E 's/x86_64/amd64/')
 BUILDINFOSDET ?=
 UDP_PROXY_2020_ARGS ?=
 
-PROJECT_VERSION    := 0.0.11
+PROJECT_VERSION    := 0.1.0
 DOCKER_REPO        := synfinatic
 PROJECT_NAME       := udp-proxy-2020
 PROJECT_TAG        := $(shell git describe --tags 2>/dev/null $(git rev-list --tags --max-count=1))
@@ -38,13 +38,13 @@ release: build-release ## Build and sign official release
 
 build-release: clean linux-amd64 linux-mips64 linux-arm darwin-amd64 freebsd docker package ## Build our release binaries
 
-tags: cmd/*.go  ## Create tags file for vim, etc
+tags: ./cmd/udp-proxy-2020/*.go  ## Create tags file for vim, etc
 	@echo Make sure you have Universal Ctags installed: https://github.com/universal-ctags/ctags
 	ctags -R
 
 .PHONY: run
-run: cmd/*.go ## build and run udp-proxy-2020 using $UDP_PROXY_2020_ARGS
-	sudo go run cmd/*.go $(UDP_PROXY_2020_ARGS)
+run: ./cmd/udp-proxy-2020/*.go ## build and run udp-proxy-2020 using $UDP_PROXY_2020_ARGS
+	sudo go run ./cmd/udp-proxy-2020/... $(UDP_PROXY_2020_ARGS)
 
 clean-all: freebsd-clean docker-clean clean ## Clean _everything_
 
@@ -54,13 +54,13 @@ clean: ## Remove all binaries in dist
 clean-go: ## Clean Go cache
 	go clean -i -r -cache -modcache
 
-$(OUTPUT_NAME): cmd/*.go .prepare
-	go build -ldflags='$(LDFLAGS)' -o $(OUTPUT_NAME) ./cmd
+$(OUTPUT_NAME): ./cmd/udp-proxy-2020/*.go .prepare
+	go build -ldflags='$(LDFLAGS)' -o $(OUTPUT_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(OUTPUT_NAME)"
 
 .PHONY: build-race
 build-race: .prepare ## Build race detection binary
-	go build -race -ldflags='$(LDFLAGS)' -o $(OUTPUT_NAME) ./cmd
+	go build -race -ldflags='$(LDFLAGS)' -o $(OUTPUT_NAME) ./cmd/udp-proxy-2020/...
 
 debug: .prepare ## Run debug in dlv
 	dlv debug ./cmd
@@ -88,11 +88,11 @@ $(DIST_DIR):
 
 .PHONY: fmt
 fmt: ## Format Go code
-	@go fmt cmd
+	@go fmt ./cmd/...
 
 .PHONY: test-fmt
 test-fmt: fmt ## Test to make sure code if formatted correctly
-	@if test `git diff cmd | wc -l` -gt 0; then \
+	@if test `git diff ./cmd | wc -l` -gt 0; then \
 	    echo "Code changes detected when running 'go fmt':" ; \
 	    git diff -Xfiles ; \
 	    exit -1 ; \
@@ -133,7 +133,8 @@ linux-amd64-shell: ## Get a shell in Linux/x86_64 Docker container
 .linux-amd64: $(LINUX_AMD64_S_NAME)
 $(LINUX_AMD64_S_NAME): .prepare
 	LDFLAGS='-l/usr/lib/libpcap.a' CGO_ENABLED=1 \
-	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_AMD64_S_NAME) ./cmd
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
+	    	-o $(LINUX_AMD64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_AMD64_S_NAME)"
 
 ######################################################################
@@ -156,16 +157,14 @@ freebsd-clean: ## Destroy FreeBSD Vagrant VM
 	rm -f .vagrant-ssh
 
 ifeq ($(GOOS),freebsd)
-# FreeBSD aarch64, armv6 and armv7 targets only work inside of FreeBSD Vagrant VM
+# FreeBSD aarch64 and armv7 targets only work inside of FreeBSD Vagrant VM
 FREEBSD_AMD64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-amd64
 FREEBSD_ARM64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-arm64
-FREEBSD_ARMV6_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-armv6
 FREEBSD_ARMV7_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-armv7
 
-freebsd-binaries: freebsd-amd64 freebsd-arm64 freebsd-armv6 freebsd-armv7 ## no-help
+freebsd-binaries: freebsd-amd64 freebsd-arm64 freebsd-armv7 ## no-help
 freebsd-amd64: $(FREEBSD_AMD64_S_NAME) ## no-help
 freebsd-arm64: $(FREEBSD_ARM64_S_NAME) ## no-help
-freebsd-armv6: $(FREEBSD_ARMV6_S_NAME) ## no-help
 freebsd-armv7: $(FREEBSD_ARMV7_S_NAME) ## no-help
 
 # Seems to be a bug with CGO & Clang where it always wants to use the host arch
@@ -196,7 +195,7 @@ $(FREEBSD_AMD64_S_NAME): .freebsd-amd64-cross
 	GOOS=freebsd GOARCH=amd64 CGO_ENABLED=1 \
 	CGO_LDFLAGS='-libverbs' \
 	go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
-	-o $(FREEBSD_AMD64_S_NAME) cmd/*.go
+		-o $(FREEBSD_AMD64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(FREEBSD_AMD64_S_NAME)"
 
 $(FREEBSD_ARM64_S_NAME): .freebsd-aarch64-cross
@@ -206,18 +205,8 @@ $(FREEBSD_ARM64_S_NAME): .freebsd-aarch64-cross
 	CC=/usr/local/freebsd-sysroot/aarch64/bin/cc \
 	PKG_CONFIG_PATH=/usr/local/freebsd-sysroot/aarch64/usr/libdata/pkgconfig \
 	go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
-	-o $(FREEBSD_ARM64_S_NAME) cmd/*.go
+		-o $(FREEBSD_ARM64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(FREEBSD_ARM64_S_NAME)"
-
-$(FREEBSD_ARMV6_S_NAME): .freebsd-arm-cross
-	GOOS=freebsd GOARCH=arm GOARM=6 CGO_ENABLED=1 \
-	CGO_LDFLAGS='--sysroot=/usr/local/freebsd-sysroot/armv6 -libverbs' \
-	CGO_CFLAGS='-I/usr/local/freebsd-sysroot/armv6/usr/include' \
-	CC=/usr/local/freebsd-sysroot/armv6/bin/cc \
-	PKG_CONFIG_PATH=/usr/local/freebsd-sysroot/armv6/usr/libdata/pkgconfig \
-	go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
-	-o $(FREEBSD_ARMV6_S_NAME) cmd/*.go
-	@echo "Created: $(FREEBSD_ARMV6_S_NAME)"
 
 $(FREEBSD_ARMV7_S_NAME): .freebsd-arm-cross
 	GOOS=freebsd GOARCH=arm GOARM=7 CGO_ENABLED=1 \
@@ -226,7 +215,7 @@ $(FREEBSD_ARMV7_S_NAME): .freebsd-arm-cross
 	CC=/usr/local/freebsd-sysroot/armv7/bin/cc \
 	PKG_CONFIG_PATH=/usr/local/freebsd-sysroot/armv7/usr/libdata/pkgconfig \
 	go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
-	-o $(FREEBSD_ARMV7_S_NAME) cmd/*.go
+		-o $(FREEBSD_ARMV7_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(FREEBSD_ARMV7_S_NAME)"
 endif
 
@@ -254,7 +243,8 @@ $(LINUX_MIPS64_S_NAME): .prepare
 	LDFLAGS='-l/usr/mips64-linux-gnuabi64/lib/libpcap.a' \
 	    GOOS=linux GOARCH=mips64 CGO_ENABLED=1 CC=mips64-linux-gnuabi64-gcc \
 	    PKG_CONFIG_PATH=/usr/mips64-linux-gnuabi64/lib/pkgconfig \
-	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_MIPS64_S_NAME) cmd/*.go
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
+	    	-o $(LINUX_MIPS64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_MIPS64_S_NAME)"
 
 ######################################################################
@@ -284,28 +274,32 @@ $(LINUX_ARMV5_S_NAME): .prepare
 	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
 	    GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=1 CC=arm-linux-gnueabi-gcc-10 \
 	    PKG_CONFIG_PATH=/usr/arm-linux-gnueabi/lib/pkgconfig \
-	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_ARMV5_S_NAME) cmd/*.go
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
+	    	-o $(LINUX_ARMV5_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARMV5_S_NAME)"
 
 $(LINUX_ARMV6_S_NAME): .prepare
 	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
 	    GOOS=linux GOARCH=arm GOARM=6 CGO_ENABLED=1 CC=arm-linux-gnueabihf-gcc-10 \
 	    PKG_CONFIG_PATH=/usr/arm-linux-gnueabihf/lib/pkgconfig \
-	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_ARMV6_S_NAME) cmd/*.go
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
+	    	-o $(LINUX_ARMV6_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARMV6_S_NAME)"
 
 $(LINUX_ARMV7_S_NAME): .prepare
 	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
 	    GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=1 CC=arm-linux-gnueabihf-gcc-10 \
 	    PKG_CONFIG_PATH=/usr/arm-linux-gnueabihf/lib/pkgconfig \
-	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_ARMV7_S_NAME) cmd/*.go
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
+	    	-o $(LINUX_ARMV7_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARMV7_S_NAME)"
 
 $(LINUX_ARM64_S_NAME): .prepare
 	LDFLAGS='-l/usr/aarch64-linux-gnu/lib/libpcap.a' \
 	    GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc-10 \
 	    PKG_CONFIG_PATH=/usr/aarch64-linux-gnu/lib/pkgconfig \
-	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' -o $(LINUX_ARM64_S_NAME) cmd/*.go
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
+		-o $(LINUX_ARM64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARM64_S_NAME)"
 
 ######################################################################
@@ -315,9 +309,9 @@ ifeq ($(GOOS),darwin)
 DARWIN_AMD64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-darwin-amd64
 darwin-amd64: $(DARWIN_AMD64_S_NAME) ## Build macOS/amd64 binary
 
-$(DARWIN_AMD64_S_NAME): cmd/*.go .prepare
+$(DARWIN_AMD64_S_NAME): ./cmd/*.go .prepare
 	GOOS=darwin GOARCH=amd64 go build -ldflags='$(LDFLAGS)' \
-	     -o $(DARWIN_AMD64_S_NAME) cmd/*.go
+	     -o $(DARWIN_AMD64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(DARWIN_AMD64_S_NAME)"
 endif
 
@@ -333,7 +327,7 @@ docker: ## Build docker image for Linux/amd64
 
 .docker:
 	CGO_ENABLED=1 \
-	go build -ldflags '$(LDFLAGS)' -o dist/udp-proxy-2020 cmd/*.go
+	go build -ldflags '$(LDFLAGS)' -o dist/udp-proxy-2020 ./cmd/udp-proxy-2020/...
 
 docker-shell: ## Get a shell in the docker image
 	docker run --rm -it --network=host \
