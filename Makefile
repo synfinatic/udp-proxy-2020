@@ -272,7 +272,7 @@ linux-arm-shell: .prepare ## Get a shell in Linux/arm build Docker container
 .linux-arm: $(LINUX_ARMV5_S_NAME) $(LINUX_ARMV6_S_NAME) $(LINUX_ARMV7_S_NAME) $(LINUX_ARM64_S_NAME)
 $(LINUX_ARMV5_S_NAME): .prepare
 	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
-	    GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=1 CC=arm-linux-gnueabi-gcc-10 \
+	    GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=1 CC=arm-linux-gnueabi-gcc-11 \
 	    PKG_CONFIG_PATH=/usr/arm-linux-gnueabi/lib/pkgconfig \
 	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 	    	-o $(LINUX_ARMV5_S_NAME) ./cmd/udp-proxy-2020/...
@@ -280,7 +280,7 @@ $(LINUX_ARMV5_S_NAME): .prepare
 
 $(LINUX_ARMV6_S_NAME): .prepare
 	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
-	    GOOS=linux GOARCH=arm GOARM=6 CGO_ENABLED=1 CC=arm-linux-gnueabihf-gcc-10 \
+	    GOOS=linux GOARCH=arm GOARM=6 CGO_ENABLED=1 CC=arm-linux-gnueabihf-gcc-11 \
 	    PKG_CONFIG_PATH=/usr/arm-linux-gnueabihf/lib/pkgconfig \
 	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 	    	-o $(LINUX_ARMV6_S_NAME) ./cmd/udp-proxy-2020/...
@@ -288,7 +288,7 @@ $(LINUX_ARMV6_S_NAME): .prepare
 
 $(LINUX_ARMV7_S_NAME): .prepare
 	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
-	    GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=1 CC=arm-linux-gnueabihf-gcc-10 \
+	    GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=1 CC=arm-linux-gnueabihf-gcc-11 \
 	    PKG_CONFIG_PATH=/usr/arm-linux-gnueabihf/lib/pkgconfig \
 	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 	    	-o $(LINUX_ARMV7_S_NAME) ./cmd/udp-proxy-2020/...
@@ -296,7 +296,7 @@ $(LINUX_ARMV7_S_NAME): .prepare
 
 $(LINUX_ARM64_S_NAME): .prepare
 	LDFLAGS='-l/usr/aarch64-linux-gnu/lib/libpcap.a' \
-	    GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc-10 \
+	    GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc-11 \
 	    PKG_CONFIG_PATH=/usr/aarch64-linux-gnu/lib/pkgconfig \
 	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 		-o $(LINUX_ARM64_S_NAME) ./cmd/udp-proxy-2020/...
@@ -309,7 +309,7 @@ ifeq ($(GOOS),darwin)
 DARWIN_AMD64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-darwin-amd64
 darwin-amd64: $(DARWIN_AMD64_S_NAME) ## Build macOS/amd64 binary
 
-$(DARWIN_AMD64_S_NAME): ./cmd/*.go .prepare
+$(DARWIN_AMD64_S_NAME): ./cmd/udp-proxy-2020/*.go .prepare
 	GOOS=darwin GOARCH=amd64 go build -ldflags='$(LDFLAGS)' \
 	     -o $(DARWIN_AMD64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(DARWIN_AMD64_S_NAME)"

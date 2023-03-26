@@ -12,6 +12,9 @@ Changed:
  - update source tree to be more Go standard
  - Go v1.18
  - `-l` is now short for `--local-delivery`
+ - Update libpcap to v1.10.3 on Linux
+ - Update Linux ARM build image to Ubuntu 22.04 / GCC 11
+ - Update Linux MIPS build image to Ubuntu 22.04 / GCC 10
 
 ## v0.0.11 - 2022-04-14
 
