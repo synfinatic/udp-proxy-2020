@@ -101,6 +101,7 @@ Advanced options:
     clients on OpenVPN tunnels if you can't use `--fixed-ip` because clients
     don't have a fixed ip.
  * `--no-listen` -- Do not listen on the specified UDP port(s) to avoid conflicts
+ * `--deliver-local` -- Deliver packets locally on loopback interface
 
 There are other flags of course, run `./udp-proxy-2020 --help` for a full list.
 
@@ -157,7 +158,7 @@ piece of software that is running on the same host as `udp-proxy-2020`.
 
 ### Does udp-proxy-2020 support running on the same host as Roon/etc?
 
-As of v0.1.0, yes.  You need to specify `--local-delivery` and `--no-listen` 
+As of v0.1.0, yes.  You need to specify `--deliver-local` and `--no-listen` 
 options so that it delivers packets via the loopback interface.
 
 ### When should I use --pcap and --pcap-path?
