@@ -11,7 +11,7 @@ RUN apt-get install -y \
     cpp-10-mips64-linux-gnuabi64 \
     golang-1.18-go \
     gccgo-10-mips64-linux-gnuabi64 \
-    libgo18-mips64-cross \
+    libgo16-mips64-cross \
     libgcc-10-dev-mips64-cross \
     libc6-mips64-cross \
     libc6-dev-mips64-cross
@@ -24,7 +24,7 @@ RUN mkdir -p /build/bin && cd /build/bin \
 
 # build libpcap
 FROM base as libpcap
-ENV LIBPCAP_VERSION=1.9.1
+ENV LIBPCAP_VERSION=1.10.3
 WORKDIR /build
 RUN wget -qO - https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz | tar zxf - && \
     cd libpcap-${LIBPCAP_VERSION} && \
