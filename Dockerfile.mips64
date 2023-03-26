@@ -1,4 +1,4 @@
-FROM ubuntu:20.04 as base
+FROM ubuntu:22.04 as base
 ENV DEBIAN_FRONTEND=noninteractive
 
 # base applications
@@ -9,9 +9,9 @@ RUN apt-get install -y \
     linux-libc-dev-mips64-cross \
     gccgo-mips64-linux-gnuabi64 \
     cpp-10-mips64-linux-gnuabi64 \
-    golang-1.16-go \
+    golang-1.18-go \
     gccgo-10-mips64-linux-gnuabi64 \
-    libgo16-mips64-cross \
+    libgo18-mips64-cross \
     libgcc-10-dev-mips64-cross \
     libc6-mips64-cross \
     libc6-dev-mips64-cross
@@ -34,7 +34,7 @@ RUN wget -qO - https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz
 # build our app
 FROM libpcap
 WORKDIR /build/udp-proxy-2020
-ENV GOROOT=/usr/lib/go-1.16
+ENV GOROOT=/usr/lib/go-1.18
 ENV PATH=/build/bin:${GOROOT}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 ENTRYPOINT make .linux-mips64

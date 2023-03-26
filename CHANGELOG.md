@@ -6,6 +6,11 @@ Added:
  - Create Debian & RPM packages for x86 and ARM64
  - Update dependencies with security vulns
 
+Changed:
+ - armv6 is no longer supported by FreeBSD as of 2022.11.21 
+ - update source tree to be more Go standard
+ - Go v1.18
+
 ## v0.0.11 - 2022-04-14
 
 Added:
