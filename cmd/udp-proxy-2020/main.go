@@ -24,7 +24,7 @@ type CLI struct {
 	Port           []int32  `kong:"short='p',help='One or more UDP ports to process'"`
 	Timeout        int64    `kong:"short='t',default=250,help='Timeout in msec'"`
 	CacheTTL       int64    `kong:"short='T',default=180,help='Client IP cache TTL in minutes'"`
-	LocalDelivery  bool     `kong:"short='l',help='Deliver packets locally over loopback'"`
+	DeliverLocal   bool     `kong:"short='l',help='Deliver packets locally over loopback'"`
 	Level          string   `kong:"short='L',default='info',enum='trace,debug,info,warn,error',help='Log level [trace|debug|info|warn|error]'"`
 	LogLines       bool     `kong:"help='Print line number in logs'"`
 	Logfile        string   `kong:"default='stderr',help='Write logs to filename'"`
@@ -85,7 +85,7 @@ func main() {
 		listeners = append(listeners, l)
 	}
 
-	if cli.LocalDelivery {
+	if cli.DeliverLocal {
 		// Create loopback listener
 		netif, err := net.InterfaceByName(getLoopback())
 		if err != nil {
