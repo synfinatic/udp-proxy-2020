@@ -1,6 +1,7 @@
 version: '3.3'
 services:
   udp-proxy-2020:
+    container_name: udp-proxy-2020
     image: synfinatic/udp-proxy-2020:latest
     environment:
       - PORTS=9003
@@ -8,5 +9,15 @@ services:
       - EXTRA_ARGS=-L debug
       - TIMEOUT=250
       - CACHETTL=90
-    restart: always
-    network_mode: host
+    restart: unless-stopped
+    networks:
+      macvlan_roon:
+        ipv4_address: 192.168.5.2
+      macvlan_main:
+        ipv4_address: 192.168.15.2
+
+networks:
+    macvlan_roon:
+      external: true
+    macvlan_main:
+      external: true
