@@ -4,6 +4,7 @@
 
 Added:
  - Create Debian & RPM packages for x86 and ARM64
+ - Build linux/amd64 docker image
  - Update dependencies with security vulns
  - Add `--local-delivery` option for when Roon runs on the same host
 
