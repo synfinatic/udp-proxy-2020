@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/google/gopacket/pcap"
-	log "github.com/sirupsen/logrus"
+	log "github.com/phuslu/log"
 )
 
 // Interfaces is a map between interface name and pcap data structure
@@ -14,52 +14,52 @@ func initializeInterface(l *Listen) {
 	// find our interface via libpcap
 	getConfiguredInterfaces()
 	if len(Interfaces[l.iname].Addresses) == 0 {
-		log.Fatalf("%s is not configured", l.iname)
+		log.Fatal().Msgf("%s is not configured", l.iname)
 	}
 
 	// configure libpcap listener
 	inactive, err := pcap.NewInactiveHandle(l.iname)
 	if err != nil {
-		log.Fatalf("%s: %s", l.iname, err)
+		log.Fatal().Msgf("%s: %s", l.iname, err)
 	}
 	defer inactive.CleanUp()
 
 	// set our timeout
 	if err = inactive.SetTimeout(l.timeout); err != nil {
-		log.Fatalf("%s: %s", l.iname, err)
+		log.Fatal().Msgf("%s: %s", l.iname, err)
 	}
 
 	// Promiscuous mode on/off
 	if err = inactive.SetPromisc(l.promisc); err != nil {
-		log.Fatalf("%s: %s", l.iname, err)
+		log.Fatal().Msgf("%s: %s", l.iname, err)
 	}
 	// Get the entire packet
 	if err = inactive.SetSnapLen(9000); err != nil {
-		log.Fatalf("%s: %s", l.iname, err)
+		log.Fatal().Msgf("%s: %s", l.iname, err)
 	}
 
 	// activate libpcap handle
 	if l.handle, err = inactive.Activate(); err != nil {
-		log.Fatalf("%s: %s", l.iname, err)
+		log.Fatal().Msgf("%s: %s", l.iname, err)
 	}
 
 	if !isValidLayerType(l.handle.LinkType()) {
-		log.Fatalf("%s: has an invalid layer type: %s", l.iname, l.handle.LinkType().String())
+		log.Fatal().Msgf("%s: has an invalid layer type: %s", l.iname, l.handle.LinkType().String())
 	}
 
 	// set our BPF filter
 	bpf_filter := buildBPFFilter(l.ports, Interfaces[l.iname].Addresses, l.promisc)
-	log.Debugf("%s: applying BPF Filter: %s", l.iname, bpf_filter)
+	log.Debug().Msgf("%s: applying BPF Filter: %s", l.iname, bpf_filter)
 	if err = l.handle.SetBPFFilter(bpf_filter); err != nil {
-		log.Fatalf("%s: %s", l.iname, err)
+		log.Fatal().Msgf("%s: %s", l.iname, err)
 	}
 
 	// just inbound packets
 	if err = l.handle.SetDirection(pcap.DirectionIn); err != nil {
-		log.Fatalf("%s: %s", l.iname, err)
+		log.Fatal().Msgf("%s: %s", l.iname, err)
 	}
 
-	log.Debugf("Opened pcap handle on %s", l.iname)
+	log.Debug().Msgf("Opened pcap handle on %s", l.iname)
 }
 
 // Uses libpcap to get a list of configured interfaces
@@ -70,7 +70,7 @@ func getConfiguredInterfaces() {
 	}
 	ifs, err := pcap.FindAllDevs()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err)
 	}
 	for _, i := range ifs {
 		if len(i.Addresses) == 0 {
