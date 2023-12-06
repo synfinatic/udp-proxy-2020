@@ -15,7 +15,7 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	"github.com/google/gopacket/pcapgo"
-	log "github.com/sirupsen/logrus"
+	log "github.com/phuslu/log"
 )
 
 const (
@@ -51,24 +51,32 @@ var validLinkTypes = []layers.LinkType{
 }
 
 // Creates a Listen struct for the given interface, promisc mode, udp sniff ports and timeout
-func newListener(netif *net.Interface, promisc, sendOnly bool, ports []int32, to time.Duration, fixed_ip []string) Listen {
+func newListener(
+	netif *net.Interface,
+	promisc, sendOnly bool,
+	ports []int32,
+	to time.Duration,
+	fixed_ip []string,
+) Listen {
 	var localip net.IP
 
-	log.Debugf("%s: ifIndex: %d", netif.Name, netif.Index)
+	log.Debug().Msgf("%s: ifIndex: %d", netif.Name, netif.Index)
 	addrs, err := netif.Addrs()
 	if err != nil {
-		log.Fatalf("Unable to obtain addresses for %s", netif.Name)
+		log.Fatal().Msgf("Unable to obtain addresses for %s", netif.Name)
 	}
-	var bcastaddr string = ""
+	var bcastaddr string
 	// only calc the broadcast address on promiscuous interfaces
 	// for non-promisc, we use our clients
 	if !promisc {
 		for _, addr := range addrs {
-			log.Debugf("%s network: %s\t\tstring: %s", netif.Name, addr.Network(), addr.String())
+			log.Debug().
+				Msgf("%s network: %s\t\tstring: %s", netif.Name, addr.Network(), addr.String())
 
 			_, ipNet, err := net.ParseCIDR(addr.String())
 			if err != nil {
-				log.Debugf("%s: Unable to parse CIDR: %s (%s)", netif.Name, addr.String(), addr.Network())
+				log.Debug().
+					Msgf("%s: Unable to parse CIDR: %s (%s)", netif.Name, addr.String(), addr.Network())
 				continue
 			}
 			if ipNet.IP.To4() == nil {
@@ -76,13 +84,17 @@ func newListener(netif *net.Interface, promisc, sendOnly bool, ports []int32, to
 			}
 			// calc broadcast
 			ip := make(net.IP, len(ipNet.IP.To4()))
-			bcastbin := binary.BigEndian.Uint32(ipNet.IP.To4()) | ^binary.BigEndian.Uint32(net.IP(ipNet.Mask).To4())
+			bcastbin := binary.BigEndian.Uint32(
+				ipNet.IP.To4(),
+			) | ^binary.BigEndian.Uint32(
+				net.IP(ipNet.Mask).To4(),
+			)
 			binary.BigEndian.PutUint32(ip, bcastbin)
 			bcastaddr = ip.String()
 		}
 		// promisc interfaces should have a bcast/ipv4 config
 		if len(bcastaddr) == 0 && promisc {
-			log.Fatalf("%s does not have a valid IPv4 configuration", netif.Name)
+			log.Fatal().Msgf("%s does not have a valid IPv4 configuration", netif.Name)
 		}
 	}
 
@@ -106,7 +118,7 @@ func newListener(netif *net.Interface, promisc, sendOnly bool, ports []int32, to
 		clients:  clients,
 	}
 
-	log.Debugf("Listen: %s", spew.Sdump(new))
+	log.Debug().Msgf("Listen: %s", spew.Sdump(new))
 	return new
 }
 
@@ -138,7 +150,7 @@ func (l *Listen) OpenWriter(path string, dir Direction) (string, error) {
 		l.writer = pcapgo.NewWriter(f)
 		return fName, l.writer.WriteFileHeader(65536, l.handle.LinkType())
 	}
-	return fName, fmt.Errorf("Invalid direction: %s", dir)
+	return fName, fmt.Errorf("invalid direction: %s", dir)
 }
 
 // Our goroutine for processing packets
@@ -166,11 +178,12 @@ func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
 			}
 
 			// is it legit?
-			if packet.NetworkLayer() == nil || packet.TransportLayer() == nil || packet.TransportLayer().LayerType() != layers.LayerTypeUDP {
-				log.Warnf("%s: Invalid packet", l.iname)
+			if packet.NetworkLayer() == nil || packet.TransportLayer() == nil ||
+				packet.TransportLayer().LayerType() != layers.LayerTypeUDP {
+				log.Warn().Msgf("%s: Invalid packet", l.iname)
 				continue
 			} else if errx := packet.ErrorLayer(); errx != nil {
-				log.Errorf("%s: Unable to decode: %s", l.iname, errx.Error())
+				log.Error().Msgf("%s: Unable to decode: %s", l.iname, errx.Error())
 			}
 
 			// if our interface is non-promisc, learn the client IP
@@ -178,7 +191,7 @@ func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
 				l.learnClientIP(packet)
 			}
 
-			log.Debugf("%s: received packet and fowarding onto other interfaces", l.iname)
+			log.Debug().Msgf("%s: received packet and forwarding onto other interfaces", l.iname)
 			s.Send(packet, l.iname, l.handle.LinkType())
 
 			// write to pcap?
@@ -192,20 +205,20 @@ func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
 					AncillaryData:  md.AncillaryData,
 				}
 				if err := l.inwriter.WritePacket(ci, packet.Data()); err != nil {
-					log.WithError(err).Warnf("Unable to write packet to pcap file")
+					log.Warn().Err(err).Msgf("Unable to write packet to pcap file")
 				}
 				if err := l.writer.WritePacket(ci, packet.Data()); err != nil {
-					log.WithError(err).Warnf("Unable to write packet to pcap file")
+					log.Warn().Err(err).Msgf("Unable to write packet to pcap file")
 				}
 			}
 
 		case <-ticker: // our timer
-			log.Debugf("handlePackets(%s) ticker", l.iname)
+			log.Debug().Msgf("handlePackets(%s) ticker", l.iname)
 			// clean client cache
 			for k, v := range l.clients {
 				// zero is hard code values
 				if !v.IsZero() && v.Before(time.Now()) {
-					log.Debugf("%s removing %s after %dsec", l.iname, k, l.clientTTL)
+					log.Debug().Msgf("%s removing %s after %dsec", l.iname, k, l.clientTTL)
 					delete(l.clients, k)
 				}
 			}
@@ -214,10 +227,11 @@ func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
 }
 
 func (l *Listen) decodePacket(sndpkt Send, eth *layers.Ethernet, loop *layers.Loopback,
-	ip4 *layers.IPv4, udp *layers.UDP, payload *gopacket.Payload) bool {
+	ip4 *layers.IPv4, udp *layers.UDP, payload *gopacket.Payload,
+) bool {
 	var parser *gopacket.DecodingLayerParser
 
-	log.Debugf("processing packet from %s on %s", sndpkt.srcif, l.iname)
+	log.Debug().Msgf("processing packet from %s on %s", sndpkt.srcif, l.iname)
 
 	switch sndpkt.linkType.String() {
 	case layers.LinkTypeNull.String(), layers.LinkTypeLoop.String():
@@ -227,13 +241,13 @@ func (l *Listen) decodePacket(sndpkt Send, eth *layers.Ethernet, loop *layers.Lo
 	case layers.LinkTypeRaw.String():
 		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeIPv4, ip4, udp, payload)
 	default:
-		log.Fatalf("Unsupported source linktype: %s", sndpkt.linkType.String())
+		log.Fatal().Msgf("Unsupported source linktype: %s", sndpkt.linkType.String())
 	}
 
 	// try decoding our packet
 	decoded := []gopacket.LayerType{}
 	if err := parser.DecodeLayers(sndpkt.packet.Data(), &decoded); err != nil {
-		log.Warnf("Unable to decode packet from %s: %s", sndpkt.srcif, err)
+		log.Warn().Msgf("Unable to decode packet from %s: %s", sndpkt.srcif, err)
 		return false
 	}
 
@@ -249,7 +263,7 @@ func (l *Listen) decodePacket(sndpkt Send, eth *layers.Ethernet, loop *layers.Lo
 		}
 	}
 	if !found_udp || !found_ipv4 {
-		log.Warnf("Packet from %s did not contain a IPv4/UDP packet", sndpkt.srcif)
+		log.Warn().Msgf("Packet from %s did not contain a IPv4/UDP packet", sndpkt.srcif)
 		return false
 	}
 
@@ -272,19 +286,19 @@ func (l *Listen) sendPackets(sndpkt Send) {
 	if !l.promisc {
 		// send one packet to broadcast IP
 		dstip := net.ParseIP(l.ipaddr).To4()
-		if err, bytes := l.sendPacket(sndpkt, dstip, eth, loop, ip4, udp, payload); err != nil {
-			log.Warnf("Unable to send %d bytes from %s out %s: %s",
+		if bytes, err := l.sendPacket(sndpkt, dstip, eth, loop, ip4, udp, payload); err != nil {
+			log.Warn().Msgf("Unable to send %d bytes from %s out %s: %s",
 				bytes, sndpkt.srcif, l.iname, err)
 		}
 	} else {
 		// sent packet to every client
 		if len(l.clients) == 0 {
-			log.Debugf("%s: Unable to send packet; no discovered clients", l.iname)
+			log.Debug().Msgf("%s: Unable to send packet; no discovered clients", l.iname)
 		}
 		for ip := range l.clients {
 			dstip := net.ParseIP(ip).To4()
-			if err, bytes := l.sendPacket(sndpkt, dstip, eth, loop, ip4, udp, payload); err != nil {
-				log.Warnf("Unable to send %d bytes from %s out %s: %s",
+			if bytes, err := l.sendPacket(sndpkt, dstip, eth, loop, ip4, udp, payload); err != nil {
+				log.Warn().Msgf("Unable to send %d bytes from %s out %s: %s",
 					bytes, sndpkt.srcif, l.iname, err)
 			}
 		}
@@ -292,7 +306,8 @@ func (l *Listen) sendPackets(sndpkt Send) {
 }
 
 func (l *Listen) buildPacket(sndpkt Send, dstip net.IP, eth layers.Ethernet, loop layers.Loopback,
-	ip4 layers.IPv4, udp layers.UDP, payload gopacket.Payload, opts gopacket.SerializeOptions) gopacket.SerializeBuffer {
+	ip4 layers.IPv4, udp layers.UDP, payload gopacket.Payload, opts gopacket.SerializeOptions,
+) gopacket.SerializeBuffer {
 	// Build our packet to send
 	buffer := gopacket.NewSerializeBuffer()
 	csum_opts := gopacket.SerializeOptions{
@@ -301,7 +316,7 @@ func (l *Listen) buildPacket(sndpkt Send, dstip net.IP, eth layers.Ethernet, loo
 	}
 	// UDP payload
 	if err := payload.SerializeTo(buffer, opts); err != nil {
-		log.Fatalf("can't serialize payload: %s", spew.Sdump(payload))
+		log.Fatal().Msgf("can't serialize payload: %s", spew.Sdump(payload))
 	}
 
 	// UDP checksums can't be calculated via SerializeOptions
@@ -315,7 +330,7 @@ func (l *Listen) buildPacket(sndpkt Send, dstip net.IP, eth layers.Ethernet, loo
 	}
 
 	if err := new_udp.SerializeTo(buffer, opts); err != nil {
-		log.Fatalf("can't serialize UDP header: %s", spew.Sdump(udp))
+		log.Fatal().Msgf("can't serialize UDP header: %s", spew.Sdump(udp))
 	}
 
 	// IPv4 header
@@ -335,13 +350,14 @@ func (l *Listen) buildPacket(sndpkt Send, dstip net.IP, eth layers.Ethernet, loo
 		Options:    ip4.Options,
 	}
 	if err := new_ip4.SerializeTo(buffer, csum_opts); err != nil {
-		log.Fatalf("can't serialize IP header: %s", spew.Sdump(new_ip4))
+		log.Fatal().Msgf("can't serialize IP header: %s", spew.Sdump(new_ip4))
 	}
 	return buffer
 }
 
 func (l *Listen) sendPacket(sndpkt Send, dstip net.IP, eth layers.Ethernet, loop layers.Loopback,
-	ip4 layers.IPv4, udp layers.UDP, payload gopacket.Payload) (error, int) {
+	ip4 layers.IPv4, udp layers.UDP, payload gopacket.Payload,
+) (int, error) {
 	opts := gopacket.SerializeOptions{
 		FixLengths:       false,
 		ComputeChecksums: false,
@@ -355,7 +371,7 @@ func (l *Listen) sendPacket(sndpkt Send, dstip net.IP, eth layers.Ethernet, loop
 			Family: layers.ProtocolFamilyIPv4,
 		}
 		if err := loop.SerializeTo(buffer, opts); err != nil {
-			log.Fatalf("can't serialize Loop header: %s", spew.Sdump(loop))
+			log.Fatal().Msgf("can't serialize Loop header: %s", spew.Sdump(loop))
 		}
 	case layers.LinkTypeEthernet.String():
 		// build a new ethernet header
@@ -366,16 +382,16 @@ func (l *Listen) sendPacket(sndpkt Send, dstip net.IP, eth layers.Ethernet, loop
 			EthernetType: layers.EthernetTypeIPv4,
 		}
 		if err := new_eth.SerializeTo(buffer, opts); err != nil {
-			log.Fatalf("can't serialize Eth header: %s", spew.Sdump(new_eth))
+			log.Fatal().Msgf("can't serialize Eth header: %s", spew.Sdump(new_eth))
 		}
 	case layers.LinkTypeRaw.String():
 		// no L2 header
 	default:
-		log.Warnf("Unsupported linktype: %s", l.handle.LinkType().String())
+		log.Warn().Msgf("Unsupported linktype: %s", l.handle.LinkType().String())
 	}
 
 	outgoingPacket := buffer.Bytes()
-	log.Debugf("%s => %s: packet len: %d", l.iname, dstip.String(), len(outgoingPacket))
+	log.Debug().Msgf("%s => %s: packet len: %d", l.iname, dstip.String(), len(outgoingPacket))
 
 	// write to pcap?
 	if l.outwriter != nil {
@@ -388,14 +404,14 @@ func (l *Listen) sendPacket(sndpkt Send, dstip net.IP, eth layers.Ethernet, loop
 			AncillaryData:  md.AncillaryData,
 		}
 		if err := l.outwriter.WritePacket(ci, outgoingPacket); err != nil {
-			log.WithError(err).Warnf("Unable to write packet to pcap file")
+			log.Warn().Err(err).Msgf("Unable to write packet to pcap file")
 		}
 		if err := l.writer.WritePacket(ci, outgoingPacket); err != nil {
-			log.WithError(err).Warnf("Unable to write packet to pcap file")
+			log.Warn().Err(err).Msgf("Unable to write packet to pcap file")
 		}
 	}
 
-	return l.handle.WritePacketData(outgoingPacket), len(outgoingPacket)
+	return len(outgoingPacket), l.handle.WritePacketData(outgoingPacket)
 }
 
 func (l *Listen) learnClientIP(packet gopacket.Packet) {
@@ -408,18 +424,30 @@ func (l *Listen) learnClientIP(packet gopacket.Packet) {
 
 	switch l.handle.LinkType().String() {
 	case layers.LinkTypeNull.String(), layers.LinkTypeLoop.String():
-		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeLoopback, &loop, &ip4, &udp, &payload)
+		parser = gopacket.NewDecodingLayerParser(
+			layers.LayerTypeLoopback,
+			&loop,
+			&ip4,
+			&udp,
+			&payload,
+		)
 	case layers.LinkTypeEthernet.String():
-		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &eth, &ip4, &udp, &payload)
+		parser = gopacket.NewDecodingLayerParser(
+			layers.LayerTypeEthernet,
+			&eth,
+			&ip4,
+			&udp,
+			&payload,
+		)
 	case layers.LinkTypeRaw.String():
 		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeIPv4, &ip4, &udp, &payload)
 	default:
-		log.Fatalf("Unsupported source linktype: %s", l.handle.LinkType().String())
+		log.Fatal().Msgf("Unsupported source linktype: %s", l.handle.LinkType().String())
 	}
 
 	decoded := []gopacket.LayerType{}
 	if err := parser.DecodeLayers(packet.Data(), &decoded); err != nil {
-		log.Debugf("Unable to decoded client IP on %s: %s", l.iname, err)
+		log.Debug().Msgf("Unable to decoded client IP on %s: %s", l.iname, err)
 	}
 
 	found_ipv4 := false
@@ -435,7 +463,7 @@ func (l *Listen) learnClientIP(packet gopacket.Packet) {
 		val, exists := l.clients[ip4.SrcIP.String()]
 		if !exists || !val.IsZero() {
 			l.clients[ip4.SrcIP.String()] = time.Now().Add(l.clientTTL)
-			log.Debugf("%s: Learned client IP: %s", l.iname, ip4.SrcIP.String())
+			log.Debug().Msgf("%s: Learned client IP: %s", l.iname, ip4.SrcIP.String())
 		}
 	}
 }
@@ -486,7 +514,7 @@ func (l *Listen) SinkUdpPackets() error {
 				for {
 					_, _, err := conn.ReadFromUDP(buff)
 					if err != nil {
-						log.WithError(err).Warnf("Unable to read broadcast packet")
+						log.Warn().Err(err).Msg("Unable to read broadcast packet")
 					}
 					// do nothing with the data
 				}
