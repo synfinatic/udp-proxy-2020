@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	log "github.com/sirupsen/logrus"
+	log "github.com/phuslu/log"
 )
 
 // Send is a struct for defining outgoing packets
@@ -29,7 +29,7 @@ func (s *SendPktFeed) Send(p gopacket.Packet, srcif string, linkType layers.Link
 		if strings.Compare(thisif, srcif) == 0 {
 			continue
 		}
-		log.Debugf("%s: sending out because we're not %s", thisif, srcif)
+		log.Debug().Msgf("%s: sending out because we're not %s", thisif, srcif)
 		send <- Send{packet: p, srcif: srcif, linkType: linkType}
 	}
 	s.lock.Unlock()
