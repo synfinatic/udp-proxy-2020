@@ -13,11 +13,13 @@ import (
 	log "github.com/phuslu/log"
 )
 
-var Version = "unknown"
-var Buildinfos = "unknown"
-var Tag = "NO-TAG"
-var CommitID = "unknown"
-var Delta = ""
+var (
+	Version    = "unknown"
+	Buildinfos = "unknown"
+	Tag        = "NO-TAG"
+	CommitID   = "unknown"
+	Delta      = ""
+)
 
 type CLI struct {
 	Interface      []string `kong:"short='i',help='Two or more interfaces to use'"`
@@ -48,7 +50,7 @@ func main() {
 	// handle our timeout
 	timeout := parseTimeout(cli.Timeout)
 
-	var fixed_ip = map[string][]string{}
+	fixed_ip := map[string][]string{}
 	for _, fip := range cli.FixedIp {
 		split := strings.Split(fip, "@")
 		if len(split) != 2 {
@@ -64,8 +66,8 @@ func main() {
 	}
 
 	// create our Listeners
-	var seenInterfaces = []string{}
-	var listeners = []Listen{}
+	seenInterfaces := []string{}
+	listeners := []Listen{}
 	for _, iface := range cli.Interface {
 		// check for duplicates
 		if stringPrefixInSlice(iface, seenInterfaces) {
@@ -78,7 +80,7 @@ func main() {
 			log.Fatal().Err(err).Msgf("Unable to find interface: %s", iface)
 		}
 
-		var promisc bool = (netif.Flags & net.FlagBroadcast) == 0
+		promisc := (netif.Flags & net.FlagBroadcast) == 0
 		l := newListener(netif, promisc, false, cli.Port, timeout, fixed_ip[iface])
 		listeners = append(listeners, l)
 	}
