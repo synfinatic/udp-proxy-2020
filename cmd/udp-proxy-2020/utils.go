@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/gopacket/pcap"
-	log "github.com/sirupsen/logrus"
+	log "github.com/phuslu/log"
 )
 
 // Check to see if the string is in the slice
@@ -31,11 +31,11 @@ func stringPrefixInSlice(a string, list []string) bool {
 }
 
 // takes a list of ports and builds our BPF filter
-func buildBPFFilter(ports []int32, addresses []pcap.InterfaceAddress, promisc bool) string {
+func buildBPFFilter(ports []int32, addresses []pcap.InterfaceAddress, _ bool) string {
 	if len(ports) < 1 {
-		log.Fatal("--port must be specified one or more times")
+		log.Fatal().Msg("--port must be specified one or more times")
 	}
-	var bpf_filters = []string{}
+	bpf_filters := []string{}
 	for _, p := range ports {
 		bpf_filters = append(bpf_filters, fmt.Sprintf("udp port %d", p))
 	}
@@ -70,7 +70,7 @@ func parseTimeout(timeout int64) time.Duration {
 	d := fmt.Sprintf("%dms", timeout)
 	to, err := time.ParseDuration(d)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err)
 	}
 	return to
 }
@@ -79,7 +79,7 @@ func parseTimeout(timeout int64) time.Duration {
 func getNetwork(addr pcap.InterfaceAddress) (string, error) {
 	var ip4 net.IP
 	if ip4 = addr.IP.To4(); ip4 == nil {
-		return "", fmt.Errorf("Unable to getNetwork for IPv6 address: %s", addr.IP.String())
+		return "", fmt.Errorf("unable to getNetwork for IPv6 address: %s", addr.IP.String())
 	}
 
 	len, _ := addr.Netmask.Size()
