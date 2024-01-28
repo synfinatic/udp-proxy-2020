@@ -119,6 +119,18 @@ your application requires a message to be sent *to* the client first, then you
 would need to specify `--fixed-ip=1.2.3.4@tun0` where `1.2.3.4` is the IP address
 of the client on tun0.
 
+## Using udp-proxy-2020 with VPNs
+
+I have tested both "road warrior" VPN configs with Roon client running on my laptop
+and connecting back to my home firewall via OpenVPN and Wireguard.  I personally
+use Wireguard instead of OpenVPN because it is more secure and has better performance.
+
+I've also tested Site-to-Site VPN using Wireguard + pfSense.  I followed the 
+[pfSense site-to-site Wireguard VPN directions](
+https://docs.netgate.com/pfsense/en/latest/recipes/wireguard-s2s.html) and 
+installed `udp-proxy-2020` on _both_ firewalls.  You must configure the
+`--interface` option to include both the LAN and Wireguard network interfaces.
+
 ## Building udp-proxy-2020
 
 If you are building for the same platform you intend to run `udp-proxy-2020`
