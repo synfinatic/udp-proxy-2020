@@ -179,7 +179,7 @@ func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
 			}
 
 			log.Debugf("%s: received packet and fowarding onto other interfaces", l.iname)
-			s.Send(packet, l.iname, l.handle.LinkType())
+			s.Send(packet, l.iname, l.localIP, l.handle.LinkType())
 
 			// write to pcap?
 			if l.inwriter != nil {
@@ -330,7 +330,7 @@ func (l *Listen) buildPacket(sndpkt Send, dstip net.IP, eth layers.Ethernet, loo
 		TTL:        ip4.TTL,
 		Protocol:   ip4.Protocol,
 		Checksum:   0, // reset to calc checksums
-		SrcIP:      ip4.SrcIP,
+		SrcIP:      sndpkt.srcIP.To4(),
 		DstIP:      dstip,
 		Options:    ip4.Options,
 	}
