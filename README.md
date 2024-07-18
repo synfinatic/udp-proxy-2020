@@ -42,7 +42,7 @@ Python/Ruby and a bunch of libraries.
 
 *Also: HAHAHAHAHAHAHA!  None of that is true!*  Needing to use
 [libpcap](https://www.tcpdump.org) means I have to cross compile using CGO because
-[gopacket/pcapgo](https://gowalker.org/github.com/google/gopacket/pcapgo) only
+[gopacket/pcapgo](https://pkg.go.dev/github.com/google/gopacket@master/pcapgo) only
 supports Linux for reading & writing to (ethernet?) network interfaces.
 
 ## Installation & Startup Scripts
