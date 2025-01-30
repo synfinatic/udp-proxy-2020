@@ -61,10 +61,11 @@ manager.  Then edit `/etc/udp-proxy-2020.conf` and start via:
 `systemctl start udp-proxy-2020`.
 
 ### Docker
-
+<!-- markdown-link-check-disable -->
 There is also a [docker image available](
 https://hub.docker.com/repository/docker/synfinatic/udp-proxy-2020) for Linux on
 AMD64 and ARM64 (like the Ubiquiti UDM).
+<!-- markdown-link-check-enable -->
 
 Note that for Docker deployments, you should be using [host networking](
 https://docs.docker.com/network/host/).

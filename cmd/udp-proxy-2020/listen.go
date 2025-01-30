@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ccoveille/go-safecast"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -307,11 +308,16 @@ func (l *Listen) buildPacket(sndpkt Send, dstip net.IP, eth layers.Ethernet, loo
 	// UDP checksums can't be calculated via SerializeOptions
 	// because it requires the IP pseudo-header:
 	// https://en.wikipedia.org/wiki/User_Datagram_Protocol#IPv4_pseudo_header
+	payload_len, err := safecast.ToUint16(len(payload))
+	if err != nil {
+		log.Fatalf("invalid payload length: %d", len(payload))
+	}
+
 	new_udp := layers.UDP{
 		SrcPort:  udp.SrcPort,
 		DstPort:  udp.DstPort,
 		Checksum: 0, // but 0 is always valid for UDP
-		Length:   uint16(8 + len(payload)),
+		Length:   payload_len,
 	}
 
 	if err := new_udp.SerializeTo(buffer, opts); err != nil {
