@@ -3,7 +3,7 @@ module github.com/synfinatic/udp-proxy-2020
 go 1.23
 
 require (
-	github.com/alecthomas/kong v1.6.1
+	github.com/alecthomas/kong v1.8.1
 	github.com/davecgh/go-spew v1.1.1
 	github.com/google/gopacket v1.1.19
 	github.com/sirupsen/logrus v1.9.3
