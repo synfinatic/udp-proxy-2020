@@ -2,10 +2,10 @@ module github.com/synfinatic/udp-proxy-2020
 
 go 1.23.0
 
-toolchain go1.23.5
+toolchain go1.24.1
 
 require (
-	github.com/alecthomas/kong v1.6.1
+	github.com/alecthomas/kong v1.10.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/google/gopacket v1.1.19
 	github.com/sirupsen/logrus v1.9.3
