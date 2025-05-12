@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.0 -- 2025-09-05
+
 Added:
  - Create Debian & RPM packages for x86 and ARM64
  - Build linux/amd64 docker image
