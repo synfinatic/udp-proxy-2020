@@ -79,7 +79,7 @@ func parseTimeout(timeout int64) time.Duration {
 func getNetwork(addr pcap.InterfaceAddress) (string, error) {
 	var ip4 net.IP
 	if ip4 = addr.IP.To4(); ip4 == nil {
-		return "", fmt.Errorf("Unable to getNetwork for IPv6 address: %s", addr.IP.String())
+		return "", fmt.Errorf("unable to getNetwork for IPv6 address: %s", addr.IP.String())
 	}
 
 	len, _ := addr.Netmask.Size()
