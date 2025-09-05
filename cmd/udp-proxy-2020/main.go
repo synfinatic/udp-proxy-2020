@@ -80,7 +80,7 @@ func main() {
 			log.WithError(err).Fatalf("Unable to find interface: %s", iface)
 		}
 
-		var promisc bool = (netif.Flags & net.FlagBroadcast) == 0
+		var promisc = (netif.Flags & net.FlagBroadcast) == 0
 		l := newListener(netif, promisc, false, cli.Port, timeout, fixed_ip[iface])
 		listeners = append(listeners, l)
 	}

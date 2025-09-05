@@ -60,7 +60,7 @@ func newListener(netif *net.Interface, promisc, sendOnly bool, ports []int32, to
 	if err != nil {
 		log.Fatalf("Unable to obtain addresses for %s", netif.Name)
 	}
-	var bcastaddr string = ""
+	var bcastaddr string
 	// only calc the broadcast address on promiscuous interfaces
 	// for non-promisc, we use our clients
 	if !promisc {
@@ -139,7 +139,7 @@ func (l *Listen) OpenWriter(path string, dir Direction) (string, error) {
 		l.writer = pcapgo.NewWriter(f)
 		return fName, l.writer.WriteFileHeader(65536, l.handle.LinkType())
 	}
-	return fName, fmt.Errorf("Invalid direction: %s", dir)
+	return fName, fmt.Errorf("invalid direction: %s", dir)
 }
 
 // Our goroutine for processing packets
@@ -273,7 +273,7 @@ func (l *Listen) sendPackets(sndpkt Send) {
 	if !l.promisc {
 		// send one packet to broadcast IP
 		dstip := net.ParseIP(l.ipaddr).To4()
-		if err, bytes := l.sendPacket(sndpkt, dstip, eth, loop, ip4, udp, payload); err != nil {
+		if bytes, err := l.sendPacket(sndpkt, dstip, eth, loop, ip4, udp, payload); err != nil {
 			log.Warnf("Unable to send %d bytes from %s out %s: %s",
 				bytes, sndpkt.srcif, l.iname, err)
 		}
@@ -284,7 +284,7 @@ func (l *Listen) sendPackets(sndpkt Send) {
 		}
 		for ip := range l.clients {
 			dstip := net.ParseIP(ip).To4()
-			if err, bytes := l.sendPacket(sndpkt, dstip, eth, loop, ip4, udp, payload); err != nil {
+			if bytes, err := l.sendPacket(sndpkt, dstip, eth, loop, ip4, udp, payload); err != nil {
 				log.Warnf("Unable to send %d bytes from %s out %s: %s",
 					bytes, sndpkt.srcif, l.iname, err)
 			}
@@ -347,7 +347,7 @@ func (l *Listen) buildPacket(sndpkt Send, dstip net.IP, eth layers.Ethernet, loo
 }
 
 func (l *Listen) sendPacket(sndpkt Send, dstip net.IP, eth layers.Ethernet, loop layers.Loopback,
-	ip4 layers.IPv4, udp layers.UDP, payload gopacket.Payload) (error, int) {
+	ip4 layers.IPv4, udp layers.UDP, payload gopacket.Payload) (int, error) {
 	opts := gopacket.SerializeOptions{
 		FixLengths:       false,
 		ComputeChecksums: false,
@@ -401,7 +401,7 @@ func (l *Listen) sendPacket(sndpkt Send, dstip net.IP, eth layers.Ethernet, loop
 		}
 	}
 
-	return l.handle.WritePacketData(outgoingPacket), len(outgoingPacket)
+	return len(outgoingPacket), l.handle.WritePacketData(outgoingPacket)
 }
 
 func (l *Listen) learnClientIP(packet gopacket.Packet) {
