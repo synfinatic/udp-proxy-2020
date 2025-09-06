@@ -126,13 +126,13 @@ linux-amd64: ## Build static Linux/x86_64 binary using Docker
 
 .PHONY: linux-amd64-shell
 linux-amd64-shell: ## Get a shell in Linux/x86_64 Docker container
-	docker run -it --rm  \
+	docker run -it --rm  --entrypoint /bin/bash \
 	    --volume $(shell pwd)/dist:/build/$(PROJECT_NAME)/dist \
-	    $(AMD64_IMAGE) /bin/bash
+	    $(AMD64_IMAGE)
 
 .linux-amd64: $(LINUX_AMD64_S_NAME)
 $(LINUX_AMD64_S_NAME): .prepare
-	LDFLAGS='-l/usr/lib/libpcap.a' CGO_ENABLED=1 \
+	LDFLAGS='$$(pkg-config --static --libs libpcap)' CGO_ENABLED=1 \
 	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 	    	-o $(LINUX_AMD64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_AMD64_S_NAME)"
@@ -234,9 +234,9 @@ linux-mips64: .prepare ## Build Linux/MIPS64 static binary in Docker container
 
 .PHONY: linux-mips64-shell
 linux-mips64-shell: .prepare ## Get a shell in Linux/MIPS64 build Docker container
-	docker run -it --rm \
+	docker run -it --rm --entrypoint /bin/bash \
 	    --volume $(shell pwd):/build/udp-proxy-2020 \
-	    --entrypoint /bin/bash $(MIPS64_IMAGE)
+	    $(MIPS64_IMAGE)
 
 .linux-mips64: $(LINUX_MIPS64_S_NAME)
 $(LINUX_MIPS64_S_NAME): .prepare
@@ -265,39 +265,35 @@ linux-arm: .prepare ## Build Linux/arm static binaries in Docker container
 
 .PHONY: linux-arm-shell
 linux-arm-shell: .prepare ## Get a shell in Linux/arm build Docker container
-	docker run -it --rm \
+	docker run -it --rm --entrypoint /bin/bash \
 	    --volume $(shell pwd):/build/udp-proxy-2020 \
-	    --entrypoint /bin/bash $(ARM_IMAGE)
+	    $(ARM_IMAGE)
 
 .linux-arm: $(LINUX_ARMV5_S_NAME) $(LINUX_ARMV6_S_NAME) $(LINUX_ARMV7_S_NAME) $(LINUX_ARM64_S_NAME)
 $(LINUX_ARMV5_S_NAME): .prepare
 	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
-	    GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=1 CC=arm-linux-gnueabi-gcc-11 \
-	    PKG_CONFIG_PATH=/usr/arm-linux-gnueabi/lib/pkgconfig \
+	    GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=1 \
 	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 	    	-o $(LINUX_ARMV5_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARMV5_S_NAME)"
 
 $(LINUX_ARMV6_S_NAME): .prepare
 	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
-	    GOOS=linux GOARCH=arm GOARM=6 CGO_ENABLED=1 CC=arm-linux-gnueabihf-gcc-11 \
-	    PKG_CONFIG_PATH=/usr/arm-linux-gnueabihf/lib/pkgconfig \
+	    GOOS=linux GOARCH=arm GOARM=6 CGO_ENABLED=1 \
 	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 	    	-o $(LINUX_ARMV6_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARMV6_S_NAME)"
 
 $(LINUX_ARMV7_S_NAME): .prepare
 	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
-	    GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=1 CC=arm-linux-gnueabihf-gcc-11 \
-	    PKG_CONFIG_PATH=/usr/arm-linux-gnueabihf/lib/pkgconfig \
+	    GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=1 \
 	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 	    	-o $(LINUX_ARMV7_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARMV7_S_NAME)"
 
 $(LINUX_ARM64_S_NAME): .prepare
-	LDFLAGS='-l/usr/aarch64-linux-gnu/lib/libpcap.a' \
-	    GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc-11 \
-	    PKG_CONFIG_PATH=/usr/aarch64-linux-gnu/lib/pkgconfig \
+	LDFLAGS="$$(pkg-config --libs --static libpcap)" \
+	    GOOS=linux GOARCH=arm64 CGO_ENABLED=1 \
 	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 		-o $(LINUX_ARM64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARM64_S_NAME)"
