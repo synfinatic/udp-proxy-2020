@@ -22,7 +22,7 @@ URL                := https://github.com/$(DOCKER_REPO)/$(PROJECT_NAME)
 DESCRIPTION        := UDP Proxy 2020: A bad hack for a stupid problem
 BUILDINFOS         := $(shell date +%FT%T%z)$(BUILDINFOSDET)
 HOSTNAME           := $(shell hostname)
-LDFLAGS            := -X "main.Version=$(PROJECT_VERSION)" -X "main.Delta=$(PROJECT_DELTA)"
+LDFLAGS            := $(LDFLAGS) -X "main.Version=$(PROJECT_VERSION)" -X "main.Delta=$(PROJECT_DELTA)"
 LDFLAGS            += -X "main.Buildinfos=$(BUILDINFOS)" -X "main.Tag=$(PROJECT_TAG)"
 LDFLAGS            += -X "main.CommitID=$(PROJECT_COMMIT)" -s -w
 OUTPUT_NAME        := $(DIST_DIR)$(PROJECT_NAME)-$(GOOS)-$(GOARCH)
@@ -280,16 +280,17 @@ $(LINUX_ARMV5_S_NAME): .prepare
 
 $(LINUX_ARMV6_S_NAME): .prepare
 	CGO_LDFLAGS="$$(pkg-config --libs libpcap)" \
-		CC=arm-linux-gnueabi-gcc-11 \
 	    GOOS=linux GOARCH=arm GOARM=6 CGO_ENABLED=1 \
-	    go build -ldflags '$(LDFLAGS)' \
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 	    	-o $(LINUX_ARMV6_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARMV6_S_NAME)"
 
 $(LINUX_ARMV7_S_NAME): .prepare
-	CGO_LDFLAGS="$$(pkg-config --libs libpcap)" \
+	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
+		CC=arm-linux-gnueabihf-gcc-11 \
+		PKG_CONFIG_PATH=/usr/arm-linux-gnueabihf/lib/pkgconfig \
 		GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=1 \
-	    go build -ldflags '$(LDFLAGS)' \
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 	    	-o $(LINUX_ARMV7_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARMV7_S_NAME)"
 
@@ -308,8 +309,6 @@ DARWIN_AMD64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-darwin-amd6
 darwin-amd64: $(DARWIN_AMD64_S_NAME) ## Build macOS/amd64 binary
 
 $(DARWIN_AMD64_S_NAME): ./cmd/udp-proxy-2020/*.go .prepare
-	PATH="/opt/homebrew/opt/libpcap/bin:$$PATH" \
-    PKG_CONFIG_PATH="/opt/homebrew/opt/libpcap/lib/pkgconfig" \
 	CGO_LDFLAGS="$$(pkg-config --libs libpcap)" \
 	GOOS=darwin GOARCH=amd64 go build -ldflags='$(LDFLAGS)' \
 	     -o $(DARWIN_AMD64_S_NAME) ./cmd/udp-proxy-2020/...

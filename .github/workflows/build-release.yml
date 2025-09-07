@@ -82,18 +82,23 @@ jobs:
                 ln -s /usr/bin/arm-linux-gnueabi-gcc-11 gcc
 
             cd ../../libpcap-${LIBPCAP_VERSION}
-
+            # --build i686-pc-linux-gnu is needed to avoid "configure: WARNING: using cross tools not prefixed with host triplet"
             # hardware float
             CC=../buildhf/bin/gcc BUILD_CC=gcc AR=../buildhf/bin/ar  RANLIB=../buildhf/bin/ranlib \
-                ./configure --build i686-pc-linux-gnu \
+                ./configure \
                 --host arm-linux-gnueabihf --prefix=/usr/arm-linux-gnueabihf && \
                 sudo make install
 
             # software float
             make clean && \
                 CC=../build/bin/gcc BUILD_CC=gcc AR=../build/bin/ar  RANLIB=../build/bin/ranlib \
-                ./configure --build i686-pc-linux-gnu \
+                ./configure \
                 --host arm-linux-gnueabi --prefix=/usr/arm-linux-gnueabi && \
+                sudo make install
+
+            RUN make clean && \ 
+                ./configure \
+                --host aarch64-linux-gnu --prefix=/usr/aarch64-linux-gnu && \
                 sudo make install
 
         - name: Run Makefile
@@ -119,9 +124,10 @@ jobs:
 
         - name: Build Binary
           run: |
+            PATH="/opt/homebrew/opt/libpcap/bin:$PATH" \
             PKG_CONFIG_PATH="/opt/homebrew/opt/libpcap/lib/pkgconfig" \
-            LDFLAGS="-L/opt/homebrew/opt/libpcap/lib" \
-            CPPFLAGS="-I/opt/homebrew/opt/libpcap/include" \
+            CGO_LDFLAGS="-L/opt/homebrew/opt/libpcap/lib" \
+            CGO_CFLAGS="-I/opt/homebrew/opt/libpcap/include" \
             make darwin-amd64
 
 #      - name: Upload files as artifact
