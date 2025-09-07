@@ -18,21 +18,22 @@ jobs:
   # for building darwin-arm64 binary we need Xcode, therefore, we need to build it on MacOS
 
   linux-amd64:
-    name: Build binaries on Ubuntu
+    name: Build Linux x86
     runs-on: ubuntu-latest
 
     steps:
-        - uses: actions/checkout@v5
-
-        - name: Install Go
-          uses: actions/setup-go@v5
-          with:
-            go-version: '${{ vars.GO_VERSION }}'
+        - name: Checkout code
+          uses: actions/checkout@v5
 
         - name: Install dependencies
           run: |
             sudo apt-get update
             sudo apt-get install -y make libpcap0.8 libpcap0.8-dev git gcc
+
+        - name: Install Go
+          uses: actions/setup-go@v5
+          with:
+            go-version: '${{ vars.GO_VERSION }}'
 
         - name: Run Makefile
           run: |
@@ -47,28 +48,60 @@ jobs:
 #          retention-days: 1
 
   linux-arm:
-    name: Build binaries on Ubuntu for ARM
+    name: Build Linux ARM
     runs-on: ubuntu-24.04-arm
 
     steps:
         - uses: actions/checkout@v5
 
-        - name: Install Go
-          uses: actions/setup-go@v5
-          with:
-            go-version: '${{ vars.GO_VERSION }}'
-
         - name: Install dependencies
           run: |
             sudo apt-get update
-            sudo apt-get install -y make libpcap0.8 libpcap0.8-dev git gcc
+            sudo apt-get install -y make libpcap0.8 libpcap0.8-dev git gcc \
+                gccgo-11-arm-linux-gnueabihf gccgo-11-arm-linux-gnueabi \
+                gcc-11-arm-linux-gnueabi-base gcc-11-arm-linux-gnueabihf-base \
+                gcc-11-arm-linux-gnueabi gcc-11-arm-linux-gnueabihf
+
+        - name: Build Libpcap from source
+          run: |
+            export LIBPCAP_VERSION=1.10.3
+            wget -qO - https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz | tar zxf -
+
+            mkdir -p ./buildhf/bin && cd ./buildhf/bin && \
+                ln -s /usr/bin/arm-linux-gnueabihf-gccgo-11 gccgo && \
+                ln -s /usr/bin/arm-linux-gnueabihf-gcc-ar-11 ar && \
+                ln -s /usr/bin/arm-linux-gnueabihf-gcc-ranlib-11 ranlib && \
+                ln -s /usr/bin/arm-linux-gnueabihf-gcc-11 gcc
+
+            cd ../..
+
+            mkdir -p ./build/bin && cd ./build/bin && \
+                ln -s /usr/bin/arm-linux-gnueabi-gccgo-11 gccgo && \
+                ln -s /usr/bin/arm-linux-gnueabi-gcc-ar-11 ar && \
+                ln -s /usr/bin/arm-linux-gnueabi-gcc-ranlib-11 ranlib && \
+                ln -s /usr/bin/arm-linux-gnueabi-gcc-11 gcc
+
+            cd ../../libpcap-${LIBPCAP_VERSION}
+
+            # hardware float
+            CC=../buildhf/bin/gcc BUILD_CC=gcc AR=../buildhf/bin/ar  RANLIB=../buildhf/bin/ranlib \
+                ./configure --build i686-pc-linux-gnu \
+                --host arm-linux-gnueabihf --prefix=/usr/arm-linux-gnueabihf && \
+                sudo make install
+
+            # software float
+            make clean && \
+                CC=../build/bin/gcc BUILD_CC=gcc AR=../build/bin/ar  RANLIB=../build/bin/ranlib \
+                ./configure --build i686-pc-linux-gnu \
+                --host arm-linux-gnueabi --prefix=/usr/arm-linux-gnueabi && \
+                sudo make install
 
         - name: Run Makefile
           run: |
             make .linux-arm
 
   macos:
-    name: Build binaries on MacOS
+    name: Build MacOS x86
     runs-on: macos-latest
 
     steps:

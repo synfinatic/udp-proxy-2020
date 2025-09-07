@@ -132,8 +132,8 @@ linux-amd64-shell: ## Get a shell in Linux/x86_64 Docker container
 
 .linux-amd64: $(LINUX_AMD64_S_NAME)
 $(LINUX_AMD64_S_NAME): .prepare
-	LDFLAGS='$$(pkg-config --static --libs libpcap)' CGO_ENABLED=1 \
-	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
+	CGO_LDFLAGS="$$(pkg-config --libs libpcap)" CGO_ENABLED=1 \
+	    go build -ldflags '$(LDFLAGS)' \
 	    	-o $(LINUX_AMD64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_AMD64_S_NAME)"
 
@@ -269,32 +269,34 @@ linux-arm-shell: .prepare ## Get a shell in Linux/arm build Docker container
 	    --volume $(shell pwd):/build/udp-proxy-2020 \
 	    $(ARM_IMAGE)
 
-.linux-arm: $(LINUX_ARMV5_S_NAME) $(LINUX_ARMV6_S_NAME) $(LINUX_ARMV7_S_NAME) $(LINUX_ARM64_S_NAME)
+#.linux-arm: $(LINUX_ARMV5_S_NAME) $(LINUX_ARMV6_S_NAME) $(LINUX_ARMV7_S_NAME) $(LINUX_ARM64_S_NAME)
+.linux-arm: $(LINUX_ARMV7_S_NAME) $(LINUX_ARM64_S_NAME)
 $(LINUX_ARMV5_S_NAME): .prepare
-	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
+	CGO_LDFLAGS="$$(pkg-config --libs libpcap)" \
 	    GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=1 \
-	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
+	    go build -ldflags '$(LDFLAGS)' \
 	    	-o $(LINUX_ARMV5_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARMV5_S_NAME)"
 
 $(LINUX_ARMV6_S_NAME): .prepare
-	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
+	CGO_LDFLAGS="$$(pkg-config --libs libpcap)" \
+		CC=arm-linux-gnueabi-gcc-11 \
 	    GOOS=linux GOARCH=arm GOARM=6 CGO_ENABLED=1 \
-	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
+	    go build -ldflags '$(LDFLAGS)' \
 	    	-o $(LINUX_ARMV6_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARMV6_S_NAME)"
 
 $(LINUX_ARMV7_S_NAME): .prepare
-	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
-	    GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=1 \
-	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
+	CGO_LDFLAGS="$$(pkg-config --libs libpcap)" \
+		GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=1 \
+	    go build -ldflags '$(LDFLAGS)' \
 	    	-o $(LINUX_ARMV7_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARMV7_S_NAME)"
 
 $(LINUX_ARM64_S_NAME): .prepare
-	LDFLAGS="$$(pkg-config --libs --static libpcap)" \
+	CGO_LDFLAGS="$$(pkg-config --libs libpcap)" \
 	    GOOS=linux GOARCH=arm64 CGO_ENABLED=1 \
-	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
+	    go build -ldflags '$(LDFLAGS)' \
 		-o $(LINUX_ARM64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARM64_S_NAME)"
 
@@ -306,6 +308,9 @@ DARWIN_AMD64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-darwin-amd6
 darwin-amd64: $(DARWIN_AMD64_S_NAME) ## Build macOS/amd64 binary
 
 $(DARWIN_AMD64_S_NAME): ./cmd/udp-proxy-2020/*.go .prepare
+	PATH="/opt/homebrew/opt/libpcap/bin:$$PATH" \
+    PKG_CONFIG_PATH="/opt/homebrew/opt/libpcap/lib/pkgconfig" \
+	CGO_LDFLAGS="$$(pkg-config --libs libpcap)" \
 	GOOS=darwin GOARCH=amd64 go build -ldflags='$(LDFLAGS)' \
 	     -o $(DARWIN_AMD64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(DARWIN_AMD64_S_NAME)"
