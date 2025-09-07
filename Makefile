@@ -277,7 +277,7 @@ $(LINUX_ARMV5_S_NAME): .prepare
 	LDFLAGS="-l/usr/arm-linux-gnueabi/lib/libpcap.a" \
 		CFLAGS='-I/usr/arm-linux-gnueabi/include' \	
 	    GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=1 \
-	    go build -ldflags '$(LDFLAGS)' \
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 	    	-o $(LINUX_ARMV5_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARMV5_S_NAME)"
 
@@ -289,21 +289,19 @@ $(LINUX_ARMV6_S_NAME): .prepare
 	    	-o $(LINUX_ARMV6_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARMV6_S_NAME)"
 
-#		PKG_CONFIG_PATH=/usr/arm-linux-gnueabihf/lib/pkgconfig
 $(LINUX_ARMV7_S_NAME): .prepare
-	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
+	LDFLAGS='-L/usr/arm-linux-gnueabi/lib -lpcap' \
 		CFLAGS='-I/usr/arm-linux-gnueabi/include' \
 		CC=arm-linux-gnueabi-gcc-11 \
 		GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=1 \
-	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
+	    go build -ldflags '$(LDFLAGS)' \
 	    	-o $(LINUX_ARMV7_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARMV7_S_NAME)"
 
-#		PKG_CONFIG_PATH=/usr/arm-linux-aarch64/lib/pkgconfig 
 $(LINUX_ARM64_S_NAME): .prepare
 	LDFLAGS="-l/usr/aarch64-linux-gnu/lib/libpcap.a" \
 	    GOOS=linux GOARCH=arm64 CGO_ENABLED=1 \
-	    go build -ldflags '$(LDFLAGS)' \
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 		-o $(LINUX_ARM64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARM64_S_NAME)"
 
@@ -311,15 +309,16 @@ $(LINUX_ARM64_S_NAME): .prepare
 # Targets for building macOS/Darwin (only valid on macOS)
 ######################################################################
 ifeq ($(GOOS),darwin)
-DARWIN_AMD64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-darwin-amd64
-darwin-amd64: $(DARWIN_AMD64_S_NAME) ## Build macOS/amd64 binary
+DARWIN_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-darwin-$(GOARCH)
+darwin: $(DARWIN_S_NAME) ## Build macOS/amd64 binary
 
-$(DARWIN_AMD64_S_NAME): ./cmd/udp-proxy-2020/*.go .prepare
+$(DARWIN_S_NAME): ./cmd/udp-proxy-2020/*.go .prepare
 	LDFLAGS="$$(pkg-config --libs libpcap)" \
 	CFLAGS="$$(pkg-config --cflags libpcap)" \
+	CGO_ENABLED=1 \
 	go build -ldflags='$(LDFLAGS)' \
-	     -o $(DARWIN_AMD64_S_NAME) ./cmd/udp-proxy-2020/...
-	@echo "Created: $(DARWIN_AMD64_S_NAME)"
+	     -o $(DARWIN_S_NAME) ./cmd/udp-proxy-2020/...
+	@echo "Created: $(DARWIN_S_NAME)"
 endif
 
 ######################################################################

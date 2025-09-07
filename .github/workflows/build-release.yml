@@ -46,7 +46,7 @@ jobs:
 
         - name: Prepare Libpcap build environment
           run: |
-            export BASEDIR=$(pwd)
+            export BASEDIR=$(pwd)/..
             mkdir -p ${BASEDIR}/buildhf/bin && cd ${BASEDIR}/buildhf/bin && \
                 ln -s /usr/bin/arm-linux-gnueabihf-gccgo-11 gccgo && \
                 ln -s /usr/bin/arm-linux-gnueabihf-gcc-ar-11 ar && \
@@ -63,26 +63,27 @@ jobs:
             export LIBPCAP_VERSION=${{ env.LIBPCAP_VERSION }}
             wget -qO - https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz | tar zvxf -
 
-        - name: Build Libpcap ARM gnueabihf
-          run: |
-            export BASEDIR=$(pwd)
-            cd ${BASEDIR}/libpcap-${LIBPCAP_VERSION}
-            CC=${BASEDIR}/buildhf/bin/gcc BUILD_CC=gcc AR=${BASEDIR}/buildhf/bin/ar  RANLIB=${BASEDIR}/buildhf/bin/ranlib \
-                ./configure --disable-dbus  --prefix=/usr/arm-linux-gnueabihf \
-                --host i686-pc-linux-gnu --build arm-none-linux-gnueabihf
-            make
-            sudo make install
+#        - name: Build Libpcap ARM gnueabihf
+#          run: |
+#            export BASEDIR=$(pwd)/..
+#            cd ${BASEDIR}/libpcap-${LIBPCAP_VERSION}
+#            CC=${BASEDIR}/buildhf/bin/gcc BUILD_CC=gcc AR=${BASEDIR}/buildhf/bin/ar  RANLIB=${BASEDIR}/buildhf/bin/ranlib \
+#                ./configure --disable-dbus  --prefix=/usr/arm-linux-gnueabihf \
+#                --host arm-linux-gnueabihf
+#            make
+#            sudo make install
+#            make clean
 
         - name: Build Libpcap ARM gnueabi
           run: |
-            export BASEDIR=$(pwd)
+            export BASEDIR=$(pwd)/..
             cd ${BASEDIR}/libpcap-${LIBPCAP_VERSION}
-            make clean
             CC=${BASEDIR}/build/bin/gcc BUILD_CC=gcc AR=${BASEDIR}/build/bin/ar  RANLIB=${BASEDIR}/build/bin/ranlib \
                 ./configure --disable-dbus --prefix=/usr/arm-linux-gnueabi \
-                --host i686-pc-linux-gnu --build arm-none-linux-gnueabi 
+                --host arm-linux-gnueabi
             make
             sudo make install
+            make clean
 
         - name: Run Makefile
           run: |
@@ -192,7 +193,7 @@ jobs:
             pkg-config --libs libpcap
             ls -lR /usr/local/lib
             ls -lR /usr/local/include
-            make darwin-amd64
+            make darwin
 
 #      - name: Upload files as artifact
 #        uses: actions/upload-artifact@v4

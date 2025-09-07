@@ -150,6 +150,7 @@ you:
     * Linux on ARMv5 (software floating point)
     * Linux on ARMv6 (hardware floating point)
     * Linux on ARMv7 (hardware floating point)
+<!-- markdown-link-check-disable-next-line -->
  * FreeBSD 12.3 on x86_64, ARM64//v7 `make freebsd` (pfSense 2.6) via
 [Vagrant](https://www.vagrantup.com) & [VirtualBox](https://www.virtualbox.org)
  * Docker image to run udp-proxy-2020 in docker `make docker`
