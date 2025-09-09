@@ -13,6 +13,7 @@ on: [pull_request]
 env:
   GO_VERSION: '${{ vars.GO_VERSION }}'
   LIBPCAP_VERSION: 1.10.3
+  FREEBSD_VERSION: 14.2
 
 jobs:
   # most binaries can be built on linux machine which is the most cost-efficient on GitHub actions
@@ -108,7 +109,6 @@ jobs:
             wget -qO - https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz | tar zvxf -
 
             cd ${BASEDIR}/libpcap-${LIBPCAP_VERSION}
-
             ./configure --disable-dbus  --prefix=/usr/aarch64-linux-gnu
             make
             sudo make install
@@ -159,6 +159,54 @@ jobs:
 #          path: dist/aws-sso*
 #          retention-days: 1
 
+  linux-mips64:
+    name: Linux MIPS64
+    runs-on: ubuntu-latest
+
+    steps:
+        - name: Checkout code
+          uses: actions/checkout@v5
+
+        - name: Install dependencies
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y tzdata wget make git flex bison \
+                gcc-11-mips64-linux-gnuabi64 \
+                linux-libc-dev-mips64-cross \
+                gccgo-mips64-linux-gnuabi64 \
+                cpp-11-mips64-linux-gnuabi64 \
+                gccgo-11-mips64-linux-gnuabi64 \
+                libgo16-mips64-cross \
+                libgcc-11-dev-mips64-cross \
+                libc6-mips64-cross \
+                libc6-dev-mips64-cross
+
+        - name: Install Go
+          uses: actions/setup-go@v5
+          with:
+            go-version: '${{ env.GO_VERSION }}'
+
+        - name: Prepare Libpcap build environment
+          run: |
+            export BASEDIR=$(pwd)/..
+            cd ${BASEDIR}
+            export LIBPCAP_VERSION=${{ env.LIBPCAP_VERSION }}
+            wget -qO - https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz | tar zvxf -
+
+        - name: Build Libpcap MIPS64
+          run: |
+            export BASEDIR=$(pwd)/..
+            cd ${BASEDIR}/libpcap-${LIBPCAP_VERSION}
+            CC=mips64-linux-gnuabi64-gcc BUILD_CC=gcc \
+            AR=mips64-linux-gnuabi64-gcc-ar  RANLIB=mips64-linux-gnuabi64-ranlib \
+            ./configure --host mips64-linux-gnuapbi64 --prefix=/usr/mips64-linux-gnuabi64
+            make
+            sudo make install
+
+        - name: Run Makefile
+          run: |
+            make .linux-mips64
+
   macos:
     name: MacOS x86
     runs-on: macos-latest
@@ -174,7 +222,7 @@ jobs:
         - name: Install dependencies
           run: |
             brew update
-            brew install make wget git
+            brew install make
 
         - name: Build Libpcap from source
           run: |
@@ -189,15 +237,33 @@ jobs:
 
         - name: Build Binary
           run: |
-            pkg-config --cflags libpcap
-            pkg-config --libs libpcap
-            ls -lR /usr/local/lib
-            ls -lR /usr/local/include
             make darwin
 
-#      - name: Upload files as artifact
-#        uses: actions/upload-artifact@v4
-#        with:
+  freebsd:
+    name: FreeBSD x86/ARM
+    runs-on: ubuntu-latest
+
+    steps:
+        - uses: actions/checkout@v5
+
+        - name: Build in FreeBSD
+          # https://github.com/marketplace/actions/freebsd-vm 
+          uses: vmactions/freebsd-vm@v1
+          with:
+            release: '${{ env.FREEBSD_VERSION }}'
+            usesh: true
+            prepare: |
+                pkg install -y git wget bash gmake go libpcap aarch64-gcc13 \
+                aarch64-binutils arm-gnueabi-binutils amd64-binutils \
+                armv7-freebsd-sysroot aarch64-freebsd-sysroot llvm15
+            run: |
+                ls -l /usr/local/bin
+                export PATH=/usr/local/bin:$PATH
+                go version
+                # fix for "fatal: detected dubious ownership in repository"
+                git config --global --add safe.directory /home/runner/work/udp-proxy-2020/udp-proxy-2020
+                FREEBSD_VERSION=${{ env.FREEBSD_VERSION }} gmake freebsd-binaries
+
 #          name: macos-build-files
 #          path: dist/aws-sso*
 #          retention-days: 1

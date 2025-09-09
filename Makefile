@@ -27,6 +27,7 @@ LDFLAGS            += -X "main.Buildinfos=$(BUILDINFOS)" -X "main.Tag=$(PROJECT_
 LDFLAGS            += -X "main.CommitID=$(PROJECT_COMMIT)" -s -w
 OUTPUT_NAME        := $(DIST_DIR)$(PROJECT_NAME)-$(GOOS)-$(GOARCH)
 DOCKER_VERSION     ?= v$(PROJECT_VERSION)
+FREEBSD_VERSION    := 14.2
 
 ALL: $(OUTPUT_NAME)
 
@@ -163,7 +164,7 @@ FREEBSD_AMD64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-am
 FREEBSD_ARM64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-arm64
 FREEBSD_ARMV7_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-armv7
 
-freebsd-binaries: freebsd-amd64 freebsd-arm64 freebsd-armv7 ## no-help
+freebsd-binaries: freebsd-amd64 # freebsd-arm64 freebsd-armv7 ## no-help
 freebsd-amd64: $(FREEBSD_AMD64_S_NAME) ## no-help
 freebsd-arm64: $(FREEBSD_ARM64_S_NAME) ## no-help
 freebsd-armv7: $(FREEBSD_ARMV7_S_NAME) ## no-help
@@ -173,33 +174,33 @@ freebsd-armv7: $(FREEBSD_ARMV7_S_NAME) ## no-help
 .PHONY: .freebsd-arm-cross .freebsd-amd64-cross .freebsd-aarch64-cross
 .freebsd-aarch64-cross:
 	@cd /usr/local/bin && \
-		if test ! -f x86_64-unknown-freebsd12.2-ld.bfd.bak ; then \
-			mv x86_64-unknown-freebsd12.2-ld.bfd x86_64-unknown-freebsd12.2-ld.bfd.bak ; \
-			ln -s aarch64-unknown-freebsd12.2-ld.bfd x86_64-unknown-freebsd12.2-ld.bfd ; \
+		if test ! -f x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd.bak ; then \
+			mv x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd.bak ; \
+			ln -s aarch64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd ; \
 		fi
 
 .freebsd-arm-cross:
 	@cd /usr/local/bin && \
-		if test ! -f x86_64-unknown-freebsd12.2-ld.bfd.bak ; then \
-			mv x86_64-unknown-freebsd12.2-ld.bfd x86_64-unknown-freebsd12.2-ld.bfd.bak ; \
-			ln -s arm-gnueabi-freebsd12.2-ld.bfd x86_64-unknown-freebsd12.2-ld.bfd ; \
+		if test ! -f x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd.bak ; then \
+			mv x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd.bak ; \
+			ln -s arm-gnueabi-freebsd$(FREEBSD_VERSION)-ld.bfd x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd ; \
 		fi
 
 .freebsd-amd64-cross:
 	@cd /usr/local/bin && \
-		if test -f x86_64-unknown-freebsd12.2-ld.bfd.bak ; then \
-			rm x86_64-unknown-freebsd12.2-ld.bfd ; \
-			mv x86_64-unknown-freebsd12.2-ld.bfd.bak x86_64-unknown-freebsd12.2-ld.bfd ;\
+		if test -f x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd.bak ; then \
+			rm x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd ; \
+			mv x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd.bak x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd ;\
 		fi
 
-$(FREEBSD_AMD64_S_NAME): .freebsd-amd64-cross
+$(FREEBSD_AMD64_S_NAME):  # .freebsd-amd64-cross
 	GOOS=freebsd GOARCH=amd64 CGO_ENABLED=1 \
 	CGO_LDFLAGS='-libverbs' \
 	go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 		-o $(FREEBSD_AMD64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(FREEBSD_AMD64_S_NAME)"
 
-$(FREEBSD_ARM64_S_NAME): .freebsd-aarch64-cross
+$(FREEBSD_ARM64_S_NAME):  # .freebsd-aarch64-cross
 	GOOS=freebsd GOARCH=arm64 CGO_ENABLED=1 \
 	CGO_LDFLAGS='--sysroot=/usr/local/freebsd-sysroot/aarch64 -libverbs' \
 	CGO_CFLAGS='-I/usr/local/freebsd-sysroot/aarch64/usr/include' \
@@ -209,7 +210,7 @@ $(FREEBSD_ARM64_S_NAME): .freebsd-aarch64-cross
 		-o $(FREEBSD_ARM64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(FREEBSD_ARM64_S_NAME)"
 
-$(FREEBSD_ARMV7_S_NAME): .freebsd-arm-cross
+$(FREEBSD_ARMV7_S_NAME):  # .freebsd-arm-cross
 	GOOS=freebsd GOARCH=arm GOARM=7 CGO_ENABLED=1 \
 	CGO_LDFLAGS='--sysroot=/usr/local/freebsd-sysroot/armv7 -libverbs' \
 	CGO_CFLAGS='-I/usr/local/freebsd-sysroot/armv7/usr/include' \
