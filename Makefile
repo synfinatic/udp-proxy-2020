@@ -22,11 +22,12 @@ URL                := https://github.com/$(DOCKER_REPO)/$(PROJECT_NAME)
 DESCRIPTION        := UDP Proxy 2020: A bad hack for a stupid problem
 BUILDINFOS         := $(shell date +%FT%T%z)$(BUILDINFOSDET)
 HOSTNAME           := $(shell hostname)
-LDFLAGS            := -X "main.Version=$(PROJECT_VERSION)" -X "main.Delta=$(PROJECT_DELTA)"
+LDFLAGS            := $(LDFLAGS) -X "main.Version=$(PROJECT_VERSION)" -X "main.Delta=$(PROJECT_DELTA)"
 LDFLAGS            += -X "main.Buildinfos=$(BUILDINFOS)" -X "main.Tag=$(PROJECT_TAG)"
 LDFLAGS            += -X "main.CommitID=$(PROJECT_COMMIT)" -s -w
 OUTPUT_NAME        := $(DIST_DIR)$(PROJECT_NAME)-$(GOOS)-$(GOARCH)
 DOCKER_VERSION     ?= v$(PROJECT_VERSION)
+FREEBSD_VERSION    := 14.2
 
 ALL: $(OUTPUT_NAME)
 
@@ -126,13 +127,14 @@ linux-amd64: ## Build static Linux/x86_64 binary using Docker
 
 .PHONY: linux-amd64-shell
 linux-amd64-shell: ## Get a shell in Linux/x86_64 Docker container
-	docker run -it --rm  \
+	docker run -it --rm  --entrypoint /bin/bash \
 	    --volume $(shell pwd)/dist:/build/$(PROJECT_NAME)/dist \
-	    $(AMD64_IMAGE) /bin/bash
+	    $(AMD64_IMAGE)
 
+#	CGO_LDFLAGS="$$(pkg-config --libs libpcap)" CGO_ENABLED=1 
 .linux-amd64: $(LINUX_AMD64_S_NAME)
 $(LINUX_AMD64_S_NAME): .prepare
-	LDFLAGS='-l/usr/lib/libpcap.a' CGO_ENABLED=1 \
+	LDFLAGS="-l/usr/local/lib/libpcap.a" CGO_ENABLED=1 \
 	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 	    	-o $(LINUX_AMD64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_AMD64_S_NAME)"
@@ -162,7 +164,7 @@ FREEBSD_AMD64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-am
 FREEBSD_ARM64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-arm64
 FREEBSD_ARMV7_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-armv7
 
-freebsd-binaries: freebsd-amd64 freebsd-arm64 freebsd-armv7 ## no-help
+freebsd-binaries: freebsd-amd64 # freebsd-arm64 freebsd-armv7 ## no-help
 freebsd-amd64: $(FREEBSD_AMD64_S_NAME) ## no-help
 freebsd-arm64: $(FREEBSD_ARM64_S_NAME) ## no-help
 freebsd-armv7: $(FREEBSD_ARMV7_S_NAME) ## no-help
@@ -172,33 +174,33 @@ freebsd-armv7: $(FREEBSD_ARMV7_S_NAME) ## no-help
 .PHONY: .freebsd-arm-cross .freebsd-amd64-cross .freebsd-aarch64-cross
 .freebsd-aarch64-cross:
 	@cd /usr/local/bin && \
-		if test ! -f x86_64-unknown-freebsd12.2-ld.bfd.bak ; then \
-			mv x86_64-unknown-freebsd12.2-ld.bfd x86_64-unknown-freebsd12.2-ld.bfd.bak ; \
-			ln -s aarch64-unknown-freebsd12.2-ld.bfd x86_64-unknown-freebsd12.2-ld.bfd ; \
+		if test ! -f x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd.bak ; then \
+			mv x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd.bak ; \
+			ln -s aarch64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd ; \
 		fi
 
 .freebsd-arm-cross:
 	@cd /usr/local/bin && \
-		if test ! -f x86_64-unknown-freebsd12.2-ld.bfd.bak ; then \
-			mv x86_64-unknown-freebsd12.2-ld.bfd x86_64-unknown-freebsd12.2-ld.bfd.bak ; \
-			ln -s arm-gnueabi-freebsd12.2-ld.bfd x86_64-unknown-freebsd12.2-ld.bfd ; \
+		if test ! -f x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd.bak ; then \
+			mv x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd.bak ; \
+			ln -s arm-gnueabi-freebsd$(FREEBSD_VERSION)-ld.bfd x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd ; \
 		fi
 
 .freebsd-amd64-cross:
 	@cd /usr/local/bin && \
-		if test -f x86_64-unknown-freebsd12.2-ld.bfd.bak ; then \
-			rm x86_64-unknown-freebsd12.2-ld.bfd ; \
-			mv x86_64-unknown-freebsd12.2-ld.bfd.bak x86_64-unknown-freebsd12.2-ld.bfd ;\
+		if test -f x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd.bak ; then \
+			rm x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd ; \
+			mv x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd.bak x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd ;\
 		fi
 
-$(FREEBSD_AMD64_S_NAME): .freebsd-amd64-cross
+$(FREEBSD_AMD64_S_NAME):  # .freebsd-amd64-cross
 	GOOS=freebsd GOARCH=amd64 CGO_ENABLED=1 \
 	CGO_LDFLAGS='-libverbs' \
 	go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 		-o $(FREEBSD_AMD64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(FREEBSD_AMD64_S_NAME)"
 
-$(FREEBSD_ARM64_S_NAME): .freebsd-aarch64-cross
+$(FREEBSD_ARM64_S_NAME):  # .freebsd-aarch64-cross
 	GOOS=freebsd GOARCH=arm64 CGO_ENABLED=1 \
 	CGO_LDFLAGS='--sysroot=/usr/local/freebsd-sysroot/aarch64 -libverbs' \
 	CGO_CFLAGS='-I/usr/local/freebsd-sysroot/aarch64/usr/include' \
@@ -208,7 +210,7 @@ $(FREEBSD_ARM64_S_NAME): .freebsd-aarch64-cross
 		-o $(FREEBSD_ARM64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(FREEBSD_ARM64_S_NAME)"
 
-$(FREEBSD_ARMV7_S_NAME): .freebsd-arm-cross
+$(FREEBSD_ARMV7_S_NAME):  # .freebsd-arm-cross
 	GOOS=freebsd GOARCH=arm GOARM=7 CGO_ENABLED=1 \
 	CGO_LDFLAGS='--sysroot=/usr/local/freebsd-sysroot/armv7 -libverbs' \
 	CGO_CFLAGS='-I/usr/local/freebsd-sysroot/armv7/usr/include' \
@@ -234,9 +236,9 @@ linux-mips64: .prepare ## Build Linux/MIPS64 static binary in Docker container
 
 .PHONY: linux-mips64-shell
 linux-mips64-shell: .prepare ## Get a shell in Linux/MIPS64 build Docker container
-	docker run -it --rm \
+	docker run -it --rm --entrypoint /bin/bash \
 	    --volume $(shell pwd):/build/udp-proxy-2020 \
-	    --entrypoint /bin/bash $(MIPS64_IMAGE)
+	    $(MIPS64_IMAGE)
 
 .linux-mips64: $(LINUX_MIPS64_S_NAME)
 $(LINUX_MIPS64_S_NAME): .prepare
@@ -265,39 +267,43 @@ linux-arm: .prepare ## Build Linux/arm static binaries in Docker container
 
 .PHONY: linux-arm-shell
 linux-arm-shell: .prepare ## Get a shell in Linux/arm build Docker container
-	docker run -it --rm \
+	docker run -it --rm --entrypoint /bin/bash \
 	    --volume $(shell pwd):/build/udp-proxy-2020 \
-	    --entrypoint /bin/bash $(ARM_IMAGE)
+	    $(ARM_IMAGE)
 
-.linux-arm: $(LINUX_ARMV5_S_NAME) $(LINUX_ARMV6_S_NAME) $(LINUX_ARMV7_S_NAME) $(LINUX_ARM64_S_NAME)
+#.linux-arm: $(LINUX_ARMV5_S_NAME) $(LINUX_ARMV6_S_NAME) $(LINUX_ARMV7_S_NAME) $(LINUX_ARM64_S_NAME)
+.linux-arm: $(LINUX_ARM64_S_NAME) 
+.linux-arm7: $(LINUX_ARMV7_S_NAME) $(LINUX_ARMV6_S_NAME) $(LINUX_ARMV5_S_NAME)
 $(LINUX_ARMV5_S_NAME): .prepare
 	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
-	    GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=1 CC=arm-linux-gnueabi-gcc-11 \
-	    PKG_CONFIG_PATH=/usr/arm-linux-gnueabi/lib/pkgconfig \
+		CFLAGS='-I/usr/arm-linux-gnueabi/include' \
+		CC=arm-linux-gnueabi-gcc-11 \
+		GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=1 \
 	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
-	    	-o $(LINUX_ARMV5_S_NAME) ./cmd/udp-proxy-2020/...
+			-o $(LINUX_ARMV5_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARMV5_S_NAME)"
 
 $(LINUX_ARMV6_S_NAME): .prepare
 	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
-	    GOOS=linux GOARCH=arm GOARM=6 CGO_ENABLED=1 CC=arm-linux-gnueabihf-gcc-11 \
-	    PKG_CONFIG_PATH=/usr/arm-linux-gnueabihf/lib/pkgconfig \
+		CFLAGS='-I/usr/arm-linux-gnueabi/include' \
+		CC=arm-linux-gnueabi-gcc-11 \
+		GOOS=linux GOARCH=arm GOARM=6 CGO_ENABLED=1 \
 	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
-	    	-o $(LINUX_ARMV6_S_NAME) ./cmd/udp-proxy-2020/...
+			-o $(LINUX_ARMV6_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARMV6_S_NAME)"
 
 $(LINUX_ARMV7_S_NAME): .prepare
 	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
-	    GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=1 CC=arm-linux-gnueabihf-gcc-11 \
-	    PKG_CONFIG_PATH=/usr/arm-linux-gnueabihf/lib/pkgconfig \
+		CFLAGS='-I/usr/arm-linux-gnueabi/include' \
+		CC=arm-linux-gnueabi-gcc-11 \
+		GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=1 \
 	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 	    	-o $(LINUX_ARMV7_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARMV7_S_NAME)"
 
 $(LINUX_ARM64_S_NAME): .prepare
-	LDFLAGS='-l/usr/aarch64-linux-gnu/lib/libpcap.a' \
-	    GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc-11 \
-	    PKG_CONFIG_PATH=/usr/aarch64-linux-gnu/lib/pkgconfig \
+	LDFLAGS="-l/usr/aarch64-linux-gnu/lib/libpcap.a" \
+	    GOOS=linux GOARCH=arm64 CGO_ENABLED=1 \
 	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 		-o $(LINUX_ARM64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARM64_S_NAME)"
@@ -306,13 +312,16 @@ $(LINUX_ARM64_S_NAME): .prepare
 # Targets for building macOS/Darwin (only valid on macOS)
 ######################################################################
 ifeq ($(GOOS),darwin)
-DARWIN_AMD64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-darwin-amd64
-darwin-amd64: $(DARWIN_AMD64_S_NAME) ## Build macOS/amd64 binary
+DARWIN_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-darwin-$(GOARCH)
+darwin: $(DARWIN_S_NAME) ## Build macOS/amd64 binary
 
-$(DARWIN_AMD64_S_NAME): ./cmd/udp-proxy-2020/*.go .prepare
-	GOOS=darwin GOARCH=amd64 go build -ldflags='$(LDFLAGS)' \
-	     -o $(DARWIN_AMD64_S_NAME) ./cmd/udp-proxy-2020/...
-	@echo "Created: $(DARWIN_AMD64_S_NAME)"
+$(DARWIN_S_NAME): ./cmd/udp-proxy-2020/*.go .prepare
+	LDFLAGS="$$(pkg-config --libs libpcap)" \
+	CFLAGS="$$(pkg-config --cflags libpcap)" \
+	CGO_ENABLED=1 \
+	go build -ldflags='$(LDFLAGS)' \
+	     -o $(DARWIN_S_NAME) ./cmd/udp-proxy-2020/...
+	@echo "Created: $(DARWIN_S_NAME)"
 endif
 
 ######################################################################

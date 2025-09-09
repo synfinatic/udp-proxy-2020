@@ -1,0 +1,331 @@
+name: Build Release Binaries
+
+on:
+  # Workflow executes when a new release is created
+  release:
+    types: [created]
+
+
+env:
+  GO_VERSION: '${{ vars.GO_VERSION }}'
+  LIBPCAP_VERSION: 1.10.3
+  FREEBSD_VERSION: 14.2
+
+jobs:
+  linux-arm7:
+    name: Linux ARM32
+    runs-on: ubuntu-latest
+
+    steps:
+        - name: Checkout code
+          uses: actions/checkout@v5
+
+        - name: Install dependencies
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y make git gcc wget \
+                gccgo-11-arm-linux-gnueabihf gccgo-11-arm-linux-gnueabi \
+                gcc-11-arm-linux-gnueabi-base gcc-11-arm-linux-gnueabihf-base \
+                gcc-11-arm-linux-gnueabi gcc-11-arm-linux-gnueabihf \
+                binutils-arm-linux-gnueabihf binutils-arm-linux-gnueabi \
+                linux-libc-dev-armhf-cross linux-libc-dev-armel-cross \
+                libgo21-armhf-cross libgo21-armel-cross \
+                libgcc-11-dev-armhf-cross libgcc-11-dev-armel-cross \
+                libc6-armhf-cross libc6-armel-cross \
+                libc6-dev-armhf-cross libc6-dev-armel-cross
+
+        - name: Install Go
+          uses: actions/setup-go@v5
+          with:
+            go-version: '${{ env.GO_VERSION }}'
+
+        - name: Prepare Libpcap build environment
+          run: |
+            export BASEDIR=$(pwd)/..
+            mkdir -p ${BASEDIR}/buildhf/bin && cd ${BASEDIR}/buildhf/bin && \
+                ln -s /usr/bin/arm-linux-gnueabihf-gccgo-11 gccgo && \
+                ln -s /usr/bin/arm-linux-gnueabihf-gcc-ar-11 ar && \
+                ln -s /usr/bin/arm-linux-gnueabihf-gcc-ranlib-11 ranlib && \
+                ln -s /usr/bin/arm-linux-gnueabihf-gcc-11 gcc
+
+            mkdir -p ${BASEDIR}/build/bin && cd ${BASEDIR}/build/bin && \
+                ln -s /usr/bin/arm-linux-gnueabi-gccgo-11 gccgo && \
+                ln -s /usr/bin/arm-linux-gnueabi-gcc-ar-11 ar && \
+                ln -s /usr/bin/arm-linux-gnueabi-gcc-ranlib-11 ranlib && \
+                ln -s /usr/bin/arm-linux-gnueabi-gcc-11 gcc
+
+            cd ${BASEDIR}
+            export LIBPCAP_VERSION=${{ env.LIBPCAP_VERSION }}
+            wget -qO - https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz | tar zvxf -
+
+#        - name: Build Libpcap ARM gnueabihf
+#          run: |
+#            export BASEDIR=$(pwd)/..
+#            cd ${BASEDIR}/libpcap-${LIBPCAP_VERSION}
+#            CC=${BASEDIR}/buildhf/bin/gcc BUILD_CC=gcc AR=${BASEDIR}/buildhf/bin/ar  RANLIB=${BASEDIR}/buildhf/bin/ranlib \
+#                ./configure --disable-dbus  --prefix=/usr/arm-linux-gnueabihf \
+#                --host arm-linux-gnueabihf
+#            make
+#            sudo make install
+#            make clean
+
+        - name: Build Libpcap ARM gnueabi
+          run: |
+            export BASEDIR=$(pwd)/..
+            cd ${BASEDIR}/libpcap-${LIBPCAP_VERSION}
+            CC=${BASEDIR}/build/bin/gcc BUILD_CC=gcc AR=${BASEDIR}/build/bin/ar  RANLIB=${BASEDIR}/build/bin/ranlib \
+                ./configure --disable-dbus --prefix=/usr/arm-linux-gnueabi \
+                --host arm-linux-gnueabi
+            make
+            sudo make install
+            make clean
+
+        - name: Build ARMv5/6/7 Binary
+          run: |
+            make .linux-arm7
+
+        # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
+        - name: Upload files as artifact
+          uses: actions/upload-artifact@v4
+          with:
+            name: build-files
+            path: dist/udp-proxy-2020*
+            retention-days: 1
+
+  linux-aarch64:
+    name: Linux ARM64
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+        - uses: actions/checkout@v5
+
+        - name: Install dependencies
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y make git gcc wget
+
+        - name: Build Libpcap from source
+          run: |
+            export BASEDIR=$(pwd)
+            export LIBPCAP_VERSION=${{ env.LIBPCAP_VERSION }}
+            wget -qO - https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz | tar zvxf -
+
+            cd ${BASEDIR}/libpcap-${LIBPCAP_VERSION}
+            ./configure --disable-dbus  --prefix=/usr/aarch64-linux-gnu
+            make
+            sudo make install
+
+        - name: Build ARM64 Binary
+          run: |
+            make .linux-arm
+
+        # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
+        - name: Upload files as artifact
+          uses: actions/upload-artifact@v4
+          with:
+            name: build-files
+            path: dist/udp-proxy-2020*
+            retention-days: 1
+  linux-amd64:
+    name: Linux x86
+    runs-on: ubuntu-latest
+
+    steps:
+        - name: Checkout code
+          uses: actions/checkout@v5
+
+        - name: Install dependencies
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y make git gcc wget 
+
+        - name: Install Go
+          uses: actions/setup-go@v5
+          with:
+            go-version: '${{ env.GO_VERSION }}'
+
+        - name: Prepare Libpcap build environment
+          run: |
+            export LIBPCAP_VERSION=${{ env.LIBPCAP_VERSION }}
+            wget -qO - https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz | tar zvxf -
+
+        - name: Build Libpcap x86
+          run: |
+            cd libpcap-${LIBPCAP_VERSION}
+            ./configure --disable-dbus
+            make
+            sudo make install
+
+        - name: Build x86 Binary
+          run: |
+            make .linux-amd64
+
+        # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
+        - name: Upload files as artifact
+          uses: actions/upload-artifact@v4
+          with:
+            name: build-files
+            path: dist/udp-proxy-2020*
+            retention-days: 1
+
+  linux-mips64:
+    name: Linux MIPS64
+    runs-on: ubuntu-latest
+
+    steps:
+        - name: Checkout code
+          uses: actions/checkout@v5
+
+        - name: Install dependencies
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y tzdata wget make git flex bison \
+                gcc-11-mips64-linux-gnuabi64 \
+                linux-libc-dev-mips64-cross \
+                gccgo-mips64-linux-gnuabi64 \
+                cpp-11-mips64-linux-gnuabi64 \
+                gccgo-11-mips64-linux-gnuabi64 \
+                libgo16-mips64-cross \
+                libgcc-11-dev-mips64-cross \
+                libc6-mips64-cross \
+                libc6-dev-mips64-cross
+
+        - name: Install Go
+          uses: actions/setup-go@v5
+          with:
+            go-version: '${{ env.GO_VERSION }}'
+
+        - name: Prepare Libpcap build environment
+          run: |
+            export BASEDIR=$(pwd)/..
+            cd ${BASEDIR}
+            export LIBPCAP_VERSION=${{ env.LIBPCAP_VERSION }}
+            wget -qO - https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz | tar zvxf -
+
+        - name: Build Libpcap MIPS64
+          run: |
+            export BASEDIR=$(pwd)/..
+            cd ${BASEDIR}/libpcap-${LIBPCAP_VERSION}
+            CC=mips64-linux-gnuabi64-gcc BUILD_CC=gcc \
+            AR=mips64-linux-gnuabi64-gcc-ar  RANLIB=mips64-linux-gnuabi64-ranlib \
+            ./configure --host mips64-linux-gnuapbi64 --prefix=/usr/mips64-linux-gnuabi64
+            make
+            sudo make install
+
+        - name: Build MIPS64 Binary
+          run: |
+            make .linux-mips64
+
+        # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
+        - name: Upload files as artifact
+          uses: actions/upload-artifact@v4
+          with:
+            name: build-files
+            path: dist/udp-proxy-2020*
+            retention-days: 1
+
+  macos:
+    name: MacOS x86
+    runs-on: macos-latest
+
+    steps:
+        - uses: actions/checkout@v5
+
+        - name: Install Go
+          uses: actions/setup-go@v5
+          with:
+            go-version: '${{ env.GO_VERSION }}'
+
+        - name: Install dependencies
+          run: |
+            brew update
+            brew install make
+
+        - name: Build Libpcap from source
+          run: |
+            export BASEDIR=$(pwd)
+            export LIBPCAP_VERSION=${{ env.LIBPCAP_VERSION }}
+            wget -qO - https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz | tar zxf -
+
+            cd ${BASEDIR}/libpcap-${LIBPCAP_VERSION}
+            ./configure --disable-dbus
+            make
+            sudo make install
+
+        - name: Build MacOS Binary
+          run: |
+            make darwin
+
+        # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
+        - name: Upload files as artifact
+          uses: actions/upload-artifact@v4
+          with:
+            name: build-files
+            path: dist/udp-proxy-2020*
+            retention-days: 1
+
+  freebsd:
+    name: FreeBSD x86/ARM
+    runs-on: ubuntu-latest
+
+    steps:
+        - uses: actions/checkout@v5
+
+        - name: Build in FreeBSD
+          # https://github.com/marketplace/actions/freebsd-vm 
+          uses: vmactions/freebsd-vm@v1
+          with:
+            release: '${{ env.FREEBSD_VERSION }}'
+            usesh: true
+            prepare: |
+                pkg install -y git wget bash gmake go libpcap aarch64-gcc13 \
+                aarch64-binutils arm-gnueabi-binutils amd64-binutils \
+                armv7-freebsd-sysroot aarch64-freebsd-sysroot
+            run: |
+                ls -la /usr/local/bin
+                export PATH=/usr/local/bin:$PATH
+                go version
+                # fix for "fatal: detected dubious ownership in repository"
+                git config --global --add safe.directory /home/runner/work/udp-proxy-2020/udp-proxy-2020
+                FREEBSD_VERSION=${{ env.FREEBSD_VERSION }} gmake freebsd-binaries
+
+        - name: Upload files as artifact
+          uses: actions/upload-artifact@v4
+          with:
+            name: build-files
+            path: dist/udp-proxy-2020*
+            retention-days: 1
+
+
+  sign-and-upload-files:
+    name: Sign and upload binary files
+    runs-on: ubuntu-latest
+
+    # Wait for binary files to be built
+    needs: [linux-arm7, linux-aarch64, linux-amd64, linux-mips64, macos, freebsd]
+
+    steps:
+      - name: Download binaries
+        uses: actions/download-artifact@v5
+        with:
+          name: build-files
+          path: dist/
+
+      # Source: https://github.com/crazy-max/ghaction-import-gpg
+      - name: Import GPG key
+        uses: crazy-max/ghaction-import-gpg@v6.3.0
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Create signature file
+        run: |
+          shasum -a 256 dist/* | gpg --clear-sign > dist/release.sig.asc
+
+      # Source: https://github.com/svenstaro/upload-release-action
+      - name: Upload all files to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          file: dist/*
+          overwrite: true
+          file_glob: true
