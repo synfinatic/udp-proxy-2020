@@ -274,27 +274,29 @@ linux-arm-shell: .prepare ## Get a shell in Linux/arm build Docker container
 .linux-arm: $(LINUX_ARM64_S_NAME) 
 .linux-arm7: $(LINUX_ARMV7_S_NAME) $(LINUX_ARMV6_S_NAME) $(LINUX_ARMV5_S_NAME)
 $(LINUX_ARMV5_S_NAME): .prepare
-	LDFLAGS="-l/usr/arm-linux-gnueabi/lib/libpcap.a" \
-		CFLAGS='-I/usr/arm-linux-gnueabi/include' \	
-	    GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=1 \
+	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
+		CFLAGS='-I/usr/arm-linux-gnueabi/include' \
+		CC=arm-linux-gnueabi-gcc-11 \
+		GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=1 \
 	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
-	    	-o $(LINUX_ARMV5_S_NAME) ./cmd/udp-proxy-2020/...
+			-o $(LINUX_ARMV5_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARMV5_S_NAME)"
 
 $(LINUX_ARMV6_S_NAME): .prepare
-	LDFLAGS="-l/usr/arm-linux-gnueabi/lib/libpcap.a" \
-		CFLAGS='-I/usr/arm-linux-gnueabi/include' \	
-	    GOOS=linux GOARCH=arm GOARM=6 CGO_ENABLED=1 \
+	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
+		CFLAGS='-I/usr/arm-linux-gnueabi/include' \
+		CC=arm-linux-gnueabi-gcc-11 \
+		GOOS=linux GOARCH=arm GOARM=6 CGO_ENABLED=1 \
 	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
-	    	-o $(LINUX_ARMV6_S_NAME) ./cmd/udp-proxy-2020/...
+			-o $(LINUX_ARMV6_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARMV6_S_NAME)"
 
 $(LINUX_ARMV7_S_NAME): .prepare
-	LDFLAGS='-L/usr/arm-linux-gnueabi/lib -lpcap' \
+	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
 		CFLAGS='-I/usr/arm-linux-gnueabi/include' \
 		CC=arm-linux-gnueabi-gcc-11 \
 		GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=1 \
-	    go build -ldflags '$(LDFLAGS)' \
+	    go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 	    	-o $(LINUX_ARMV7_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(LINUX_ARMV7_S_NAME)"
 

@@ -18,7 +18,7 @@ jobs:
   # most binaries can be built on linux machine which is the most cost-efficient on GitHub actions
   # for building darwin-arm64 binary we need Xcode, therefore, we need to build it on MacOS
   linux-arm7:
-    name: Build Linux ARM32 Binaries
+    name: Linux ARM32
     runs-on: ubuntu-latest
 
     steps:
@@ -89,8 +89,36 @@ jobs:
           run: |
             make .linux-arm7
 
+  linux-aarch64:
+    name: Linux ARM64
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+        - uses: actions/checkout@v5
+
+        - name: Install dependencies
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y make git gcc wget
+
+        - name: Build Libpcap from source
+          run: |
+            export BASEDIR=$(pwd)
+            export LIBPCAP_VERSION=${{ env.LIBPCAP_VERSION }}
+            wget -qO - https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz | tar zvxf -
+
+            cd ${BASEDIR}/libpcap-${LIBPCAP_VERSION}
+
+            ./configure --disable-dbus  --prefix=/usr/aarch64-linux-gnu
+            make
+            sudo make install
+
+        - name: Run Makefile
+          run: |
+            make .linux-arm
+
   linux-amd64:
-    name: Build Linux x86
+    name: Linux x86
     runs-on: ubuntu-latest
 
     steps:
@@ -131,36 +159,8 @@ jobs:
 #          path: dist/aws-sso*
 #          retention-days: 1
 
-  linux-aarch64:
-    name: Build Linux ARM64
-    runs-on: ubuntu-24.04-arm
-
-    steps:
-        - uses: actions/checkout@v5
-
-        - name: Install dependencies
-          run: |
-            sudo apt-get update
-            sudo apt-get install -y make git gcc wget
-
-        - name: Build Libpcap from source
-          run: |
-            export BASEDIR=$(pwd)
-            export LIBPCAP_VERSION=${{ env.LIBPCAP_VERSION }}
-            wget -qO - https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz | tar zvxf -
-
-            cd ${BASEDIR}/libpcap-${LIBPCAP_VERSION}
-
-            ./configure --disable-dbus  --prefix=/usr/aarch64-linux-gnu
-            make
-            sudo make install
-
-        - name: Run Makefile
-          run: |
-            make .linux-arm
-
   macos:
-    name: Build MacOS x86
+    name: MacOS x86
     runs-on: macos-latest
 
     steps:

@@ -12,10 +12,10 @@ import (
 
 	"github.com/ccoveille/go-safecast"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcap"
-	"github.com/google/gopacket/pcapgo"
+	"github.com/gopacket/gopacket"
+	"github.com/gopacket/gopacket/layers"
+	"github.com/gopacket/gopacket/pcap"
+	"github.com/gopacket/gopacket/pcapgo"
 	log "github.com/sirupsen/logrus"
 )
 
