@@ -48,4 +48,4 @@ EOF
 }
 
 package amd64
-package arm64
+#package arm64

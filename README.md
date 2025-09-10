@@ -40,7 +40,7 @@ I'm writing this in GoLang so at least cross compiling onto your random Linux/Fr
 router/firewall is reasonably easy.  No ugly cross-compling C or trying to install
 Python/Ruby and a bunch of libraries.
 
-*Also: HAHAHAHAHAHAHA!  None of that is true!*  Needing to use
+_Also: HAHAHAHAHAHAHA!  None of that is true!_  Needing to use
 [libpcap](https://www.tcpdump.org) means I have to cross compile using CGO because
 [gopacket/pcapgo](https://pkg.go.dev/github.com/google/gopacket@master/pcapgo) only
 supports Linux for reading & writing to (ethernet?) network interfaces.
@@ -56,8 +56,8 @@ are quite common among the Roon user community.
 ### Packages
 
 If you are using a Linux RedHat or Debian based distro, the easiest way to install
-is grab the appropriate `.rpm` or `.deb` file and install it with your package 
-manager.  Then edit `/etc/udp-proxy-2020.conf` and start via: 
+is grab the appropriate `.rpm` or `.deb` file and install it with your package
+manager.  Then edit `/etc/udp-proxy-2020.conf` and start via:
 `systemctl start udp-proxy-2020`.
 
 ### Docker
@@ -78,6 +78,7 @@ for Linux, FreeBSD (pfSense) and MacOS for Intel, ARM and MIPS hardware.
 There are now instructions and startup scripts available in the [startup-scripts](
 startup-scripts) directory.  If you figure out how to add support for another
 platform, please send me a pull request!
+
 ## Usage
 
 ## Configuration
@@ -88,21 +89,21 @@ Also, please note on many operating systems you will need to run it as the
 
 Currently there are only a few flags you probaly need to worry about:
 
- * `--interface` -- Specify two or more network interfaces to listen on.
- * `--port` -- Specify one or more UDP ports to monitor.
- * `--level` -- Specify the log level: [trace|debug|warn|info|error]
+* `--interface` -- Specify two or more network interfaces to listen on.
+* `--port` -- Specify one or more UDP ports to monitor.
+* `--level` -- Specify the log level: [trace|debug|warn|info|error]
 
 Advanced options:
 
- * `--fixed-ip` -- Hardcode an <interface>@<ipaddr> to always send traffic to.
-    Useful for things like OpenVPN in site-to-site mode.
- * `--timeout` -- Number of ms for pcap timeout value. (default is 250ms)
- * `--cache-ttl` -- Number of minutes to cache IPs for. (default is 180min / 3hrs)
-    This value may need to be increased if you have problems passing traffic to
-    clients on OpenVPN tunnels if you can't use `--fixed-ip` because clients
-    don't have a fixed ip.
- * `--no-listen` -- Do not listen on the specified UDP port(s) to avoid conflicts
- * `--deliver-local` -- Deliver packets locally on loopback interface
+* `--fixed-ip` -- Hardcode an `<interface>@<ipaddr>` to always send traffic to.
+   Useful for things like OpenVPN in site-to-site mode.
+* `--timeout` -- Number of ms for pcap timeout value. (default is 250ms)
+* `--cache-ttl` -- Number of minutes to cache IPs for. (default is 180min / 3hrs)
+   This value may need to be increased if you have problems passing traffic to
+   clients on OpenVPN tunnels if you can't use `--fixed-ip` because clients
+   don't have a fixed ip.
+* `--no-listen` -- Do not listen on the specified UDP port(s) to avoid conflicts
+* `--deliver-local` -- Deliver packets locally on loopback interface
 
 There are other flags of course, run `./udp-proxy-2020 --help` for a full list.
 
@@ -138,26 +139,6 @@ If you are building for the same platform you intend to run `udp-proxy-2020`
 then you just need to make sure you have `libpcap` and the necessary headers
 (you may need a `-dev` package for that) and run `make` or `gmake` as
 appropriate (we need GNU Make, not BSD Make).
-
-If you need to build cross platform, then one of the following targets may help
-you:
-
- * Linux on x86_64 `make linux-amd64` via [Docker](https://www.docker.com)
- * Linux on MIPS64 `make linux-mips64` (Linux/MIPS64 big-endian for Ubiquiti
-    USG/EdgeRouter) via Docker
- * Linux on ARM `make linux-arm` via Docker:
-    * Linux on ARM64 for Ubiquiti UDM/UDM Pro
-    * Linux on ARMv5 (software floating point)
-    * Linux on ARMv6 (hardware floating point)
-    * Linux on ARMv7 (hardware floating point)
-<!-- markdown-link-check-disable -->
- * FreeBSD 12.3 on x86_64, ARM64//v7 `make freebsd` (pfSense 2.6) via
-[Vagrant](https://www.vagrantup.com) & [VirtualBox](https://www.virtualbox.org)
-<!-- markdown-link-check-enable -->
- * Docker image to run udp-proxy-2020 in docker `make docker`
-
-You can get a full list of make targets and basic info about them by running:
-`make help`.
 
 ## FAQ
 
@@ -198,11 +179,11 @@ that came to my mind.  Also, [naming is hard](https://martinfowler.com/bliki/Two
 
 ### What network interface types are supported?
 
- * Ethernet
- * WiFi interfaces which appear as Ethernet
- * `tun` interfaces, like those used by [OpenVPN](https://openvpn.net)
- * `raw` interfaces, like those used by [Wireguard](https://www.wireguard.com)
- * `vti` interfaces for site-to-site IPSec
+* Ethernet
+* WiFi interfaces which appear as Ethernet
+* `tun` interfaces, like those used by [OpenVPN](https://openvpn.net)
+* `raw` interfaces, like those used by [Wireguard](https://www.wireguard.com)
+* `vti` interfaces for site-to-site IPSec
 
 Note that L2TP VPN tunnels on Linux are not compatible with udp-proxy-2020
 because the Linux kernel exposes those interfaces as [Linux SLL](
@@ -219,16 +200,15 @@ forums wrote up
 
 udp-proxy-2020 is built for multiple OS and hardware platforms:
 
- * MacOS/Intel x86_64: `darwin-amd64`
- * Linux/Intel x86_64: `linux-amd64`
- * Linux/ARM64: `linux-arm64` (RasPi 2 V1.2 and above, Ubiquiti UniFi Dream Machine)
- * Linux/ARMv7 (hardware floating point): `linux-armv7` (RasPi 2 V1.1 and below)
- * Linux/ARMv6 (hardware floating point): `linux-armv6`
- * Linux/ARMv5 (software floating point): `linux-armv5`
- * Linux/MIPS64: `linux-mips64` (Ubiquiti USG/EdgeRouter)
- * FreeBSD/Intel x86_64: `freebsd-amd64` (works with pfSense on x86)
- * FreeBSD/ARMv8: `freebsd-arm64` (Netgate SG-1100 & SG-2100)
- * FreeBSD/ARMv7: `freebsd-armv7` (Netgate SG-3100)
+* MacOS/Intel x86_64: `darwin-amd64`
+* Linux/Intel x86_64: `linux-amd64`
+* Linux/ARM64: `linux-arm64` (RasPi 2 V1.2 and above, Ubiquiti UniFi Dream Machine)
+* Linux/ARMv7 (~~hardware~~software floating point): `linux-armv7` (RasPi 2 V1.1 and below)
+* Linux/ARMv6 (~~hardware~~software floating point): `linux-armv6`
+* Linux/ARMv5 (software floating point): `linux-armv5`
+* Linux/MIPS64: `linux-mips64` (Ubiquiti USG/EdgeRouter)
+* FreeBSD/Intel x86_64: `freebsd-amd64` (works with pfSense/OpnSense on x86)
+* FreeBSD/ARMv8: `freebsd-arm64` (Netgate SG-1100 & SG-2100, etc)
 
 ### How can I say thanks?
 

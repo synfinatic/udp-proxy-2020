@@ -12,7 +12,7 @@ env:
   FREEBSD_VERSION: 14.2
 
 jobs:
-  linux-arm7:
+  linux-arm32:
     name: Linux ARM32
     runs-on: ubuntu-latest
 
@@ -82,7 +82,7 @@ jobs:
 
         - name: Build ARMv5/6/7 Binary
           run: |
-            make .linux-arm7
+            make .linux-arm32
 
         # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
         - name: Upload files as artifact
@@ -159,6 +159,10 @@ jobs:
         - name: Build x86 Binary
           run: |
             make .linux-amd64
+
+        - name: Create Deb/RPM packages
+          run: |
+            make package
 
         # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
         - name: Upload files as artifact
@@ -302,7 +306,7 @@ jobs:
     runs-on: ubuntu-latest
 
     # Wait for binary files to be built
-    needs: [linux-arm7, linux-aarch64, linux-amd64, linux-mips64, macos, freebsd]
+    needs: [linux-arm32, linux-aarch64, linux-amd64, linux-mips64, macos, freebsd]
 
     steps:
       - name: Download binaries

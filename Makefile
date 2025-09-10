@@ -273,7 +273,7 @@ linux-arm-shell: .prepare ## Get a shell in Linux/arm build Docker container
 
 #.linux-arm: $(LINUX_ARMV5_S_NAME) $(LINUX_ARMV6_S_NAME) $(LINUX_ARMV7_S_NAME) $(LINUX_ARM64_S_NAME)
 .linux-arm: $(LINUX_ARM64_S_NAME) 
-.linux-arm7: $(LINUX_ARMV7_S_NAME) $(LINUX_ARMV6_S_NAME) $(LINUX_ARMV5_S_NAME)
+.linux-arm32: $(LINUX_ARMV7_S_NAME) $(LINUX_ARMV6_S_NAME) $(LINUX_ARMV5_S_NAME)
 $(LINUX_ARMV5_S_NAME): .prepare
 	LDFLAGS='-l/usr/arm-linux-gnueabi/lib/libpcap.a' \
 		CFLAGS='-I/usr/arm-linux-gnueabi/include' \
@@ -354,7 +354,7 @@ docker-release: ## Tag and push docker images Linux AMD64/ARM64
 docker-clean: ## Remove all docker build images
 	docker image rm $(ARM_IMAGE) $(AMD64_IMAGE) $(MIPS64_IMAGE) || true
 
-package: linux-amd64 linux-arm  ## Build deb/rpm packages
+package: .linux-amd64  ## Build deb/rpm packages
 	docker build -t udp-proxy-2020-builder:latest -f Dockerfile.package .
 	docker run --rm \
 		-v $$(pwd)/dist:/root/dist \
