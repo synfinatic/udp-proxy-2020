@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v0.1.2 -- 2025-09-09
+
+Changed:
+- Removed GPG signature from build-release
+
 ## v0.1.1 -- 2025-09-09
 
 Changed:
