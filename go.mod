@@ -10,7 +10,7 @@ require (
 	golang.org/x/net v0.39.0 // indirect; security
 )
 
-require github.com/ccoveille/go-safecast v1.5.0
+require github.com/ccoveille/go-safecast v1.6.1
 
 require golang.org/x/sys v0.32.0 // indirect
 
