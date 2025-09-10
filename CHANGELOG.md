@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## v0.1.0 -- 2025-09-05
+## v0.1.0 -- 2025-09-09
 
 Added:
  - Create Debian & RPM packages for x86 and ARM64
