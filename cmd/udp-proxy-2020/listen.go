@@ -1,13 +1,13 @@
 package main
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/ccoveille/go-safecast"
@@ -26,21 +26,22 @@ const (
 
 // Struct containing everything for an interface
 type Listen struct {
-	iname     string               // interface to use
-	netif     *net.Interface       // interface descriptor
-	ports     []int32              // port(s) we listen for packets
-	ipaddr    string               // dstip we send packets to
-	promisc   bool                 // do we enable promisc on this interface?
-	handle    *pcap.Handle         // gopacket.pcap handle
-	writer    *pcapgo.Writer       // in and outbound write packet handle
-	inwriter  *pcapgo.Writer       // inbound write packet handle
-	outwriter *pcapgo.Writer       // outbound write packet handle
-	sendOnly  bool                 // Only send on this interface
-	localIP   net.IP               // the local interface IP
-	timeout   time.Duration        // timeout for loop
-	clientTTL time.Duration        // ttl for client cache
-	sendpkt   chan Send            // channel used to receive packets we need to send
-	clients   map[string]time.Time // keep track of clients for non-promisc interfaces
+	iname        string               // interface to use
+	netif        *net.Interface       // interface descriptor
+	ports        []int32              // port(s) we listen for packets
+	ipaddr       string               // dstip we send packets to
+	promisc      bool                 // do we enable promisc on this interface?
+	handle       *pcap.Handle         // gopacket.pcap handle
+	writer       *pcapgo.Writer       // in and outbound write packet handle
+	inwriter     *pcapgo.Writer       // inbound write packet handle
+	outwriter    *pcapgo.Writer       // outbound write packet handle
+	sendOnly     bool                 // Only send on this interface
+	localIP      net.IP               // the local interface IP
+	timeout      time.Duration        // timeout for loop
+	clientTTL    time.Duration        // ttl for client cache
+	sendpkt      chan Send            // channel used to receive packets we need to send
+	clients      map[string]time.Time // keep track of clients for non-promisc interfaces
+	keepSourceIP bool                 // keep srcIP in relayed packets, if false use adapter ip
 }
 
 // List of LayerTypes we support in sendPacket()
@@ -52,7 +53,7 @@ var validLinkTypes = []layers.LinkType{
 }
 
 // Creates a Listen struct for the given interface, promisc mode, udp sniff ports and timeout
-func newListener(netif *net.Interface, promisc, sendOnly bool, ports []int32, to time.Duration, fixed_ip []string) Listen {
+func newListener(netif *net.Interface, promisc, sendOnly bool, ports []int32, to time.Duration, fixed_ip []string, keepSourceIP bool) Listen {
 	var localip net.IP
 
 	log.Debugf("%s: ifIndex: %d", netif.Name, netif.Index)
@@ -65,16 +66,15 @@ func newListener(netif *net.Interface, promisc, sendOnly bool, ports []int32, to
 	// for non-promisc, we use our clients
 	if !promisc {
 		for _, addr := range addrs {
-			log.Debugf("%s network: %s\t\tstring: %s", netif.Name, addr.Network(), addr.String())
-
-			_, ipNet, err := net.ParseCIDR(addr.String())
-			if err != nil {
-				log.Debugf("%s: Unable to parse CIDR: %s (%s)", netif.Name, addr.String(), addr.Network())
+			ipNet, ok := addr.(*net.IPNet)
+			if !ok {
+				log.Debugf("%s: not an new.IPNet: %s (%s)", netif.Name, addr.String(), addr.Network())
 				continue
 			}
 			if ipNet.IP.To4() == nil {
 				continue // Skip non-IPv4 addresses
 			}
+			log.Debugf("%s network: %s\t\tstring: %s", netif.Name, addr.Network(), addr.String())
 			// calc broadcast
 			ip := make(net.IP, len(ipNet.IP.To4()))
 			bcastbin := binary.BigEndian.Uint32(ipNet.IP.To4()) | ^binary.BigEndian.Uint32(net.IP(ipNet.Mask).To4())
@@ -87,6 +87,13 @@ func newListener(netif *net.Interface, promisc, sendOnly bool, ports []int32, to
 		}
 	}
 
+	for _, addr := range addrs {
+		if addr, ok := addr.(*net.IPNet); ok && addr.IP.To4() != nil {
+			localip = addr.IP.To4()
+			break
+		}
+	}
+
 	// fixed ip clients
 	clients := make(map[string]time.Time)
 	for _, ip := range fixed_ip {
@@ -94,17 +101,18 @@ func newListener(netif *net.Interface, promisc, sendOnly bool, ports []int32, to
 	}
 
 	new := Listen{
-		iname:    netif.Name,
-		netif:    netif,
-		localIP:  localip,
-		sendOnly: sendOnly,
-		ports:    ports,
-		ipaddr:   bcastaddr,
-		timeout:  to,
-		promisc:  promisc,
-		handle:   nil,
-		sendpkt:  make(chan Send, SEND_BUFFER_SIZE),
-		clients:  clients,
+		iname:        netif.Name,
+		netif:        netif,
+		localIP:      localip,
+		sendOnly:     sendOnly,
+		ports:        ports,
+		ipaddr:       bcastaddr,
+		timeout:      to,
+		promisc:      promisc,
+		handle:       nil,
+		sendpkt:      make(chan Send, SEND_BUFFER_SIZE),
+		clients:      clients,
+		keepSourceIP: keepSourceIP,
 	}
 
 	log.Debugf("Listen: %s", spew.Sdump(new))
@@ -143,7 +151,7 @@ func (l *Listen) OpenWriter(path string, dir Direction) (string, error) {
 }
 
 // Our goroutine for processing packets
-func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
+func (l *Listen) handlePackets(ctx context.Context, s *SendPktFeed) {
 	// add ourself as a sender
 	s.RegisterSender(l.sendpkt, l.iname)
 
@@ -158,6 +166,8 @@ func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
 	// loop forever and ever and ever
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case s := <-l.sendpkt: // packet arrived from another interface
 			l.sendPackets(s)
 		case packet := <-packets: // packet arrived on this interfaces
@@ -281,6 +291,9 @@ func (l *Listen) sendPackets(sndpkt Send) {
 		// sent packet to every client
 		if len(l.clients) == 0 {
 			log.Debugf("%s: Unable to send packet; no discovered clients", l.iname)
+		}
+		if !l.keepSourceIP && l.localIP != nil {
+			ip4.SrcIP = l.localIP
 		}
 		for ip := range l.clients {
 			dstip := net.ParseIP(ip).To4()
@@ -438,10 +451,16 @@ func (l *Listen) learnClientIP(packet gopacket.Packet) {
 	}
 
 	if found_ipv4 {
-		val, exists := l.clients[ip4.SrcIP.String()]
+		ipString := ip4.SrcIP.String()
+		if _, ok := isLocalIp[ipString]; ok {
+			log.Debugf("Ignoring local IP %s: %s", l.iname, ipString)
+			return
+		}
+
+		val, exists := l.clients[ipString]
 		if !exists || !val.IsZero() {
-			l.clients[ip4.SrcIP.String()] = time.Now().Add(l.clientTTL)
-			log.Debugf("%s: Learned client IP: %s", l.iname, ip4.SrcIP.String())
+			l.clients[ipString] = time.Now().Add(l.clientTTL)
+			log.Debugf("%s: Learned client IP: %s", l.iname, ipString)
 		}
 	}
 }

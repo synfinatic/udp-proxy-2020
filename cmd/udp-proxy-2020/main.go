@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +35,7 @@ type CLI struct {
 	ListInterfaces bool     `kong:"help='List available interfaces and exit'"`
 	Version        bool     `kong:"short='v',help='Print version information'"`
 	NoListen       bool     `kong:"help='Do not actively listen on UDP port(s)'"`
+	KeepSourceIP   bool     `kong:"keepSource='Keep original srcIP instead of using target network IP'"`
 }
 
 func init() {
@@ -42,6 +45,30 @@ func init() {
 		DisableTimestamp:       true,
 	})
 	log.SetOutput(os.Stderr)
+}
+
+func getIfaceByName(name string) (*net.Interface, error) {
+	netif, err := net.InterfaceByName(name)
+	if err != nil {
+		return nil, err
+	}
+	netAs, err := netif.Addrs()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, v := range Interfaces {
+		for _, a := range v.Addresses {
+			aS := a.IP.String() + "/"
+			for _, netA := range netAs {
+				if strings.HasPrefix(netA.String(), aS) {
+					netif.Name = v.Name
+					return netif, nil
+				}
+			}
+		}
+	}
+	return netif, nil
 }
 
 func main() {
@@ -68,31 +95,36 @@ func main() {
 	// create our Listeners
 	var seenInterfaces = []string{}
 	var listeners = []Listen{}
+
+	// ensure interfaces is set
+	getConfiguredInterfaces()
+
 	for _, iface := range cli.Interface {
+		iface := strings.TrimSpace(iface)
 		// check for duplicates
 		if stringPrefixInSlice(iface, seenInterfaces) {
 			log.Fatalf("Can't specify the same interface (%s) multiple times", iface)
 		}
 		seenInterfaces = append(seenInterfaces, iface)
 
-		netif, err := net.InterfaceByName(iface)
+		netif, err := getIfaceByName(iface)
 		if err != nil {
 			log.WithError(err).Fatalf("Unable to find interface: %s", iface)
 		}
 
 		var promisc = (netif.Flags & net.FlagBroadcast) == 0
-		l := newListener(netif, promisc, false, cli.Port, timeout, fixed_ip[iface])
+		l := newListener(netif, promisc, false, cli.Port, timeout, fixed_ip[iface], cli.KeepSourceIP)
 		listeners = append(listeners, l)
 	}
 
 	if cli.DeliverLocal {
 		// Create loopback listener
-		netif, err := net.InterfaceByName(getLoopback())
+		netif, err := getIfaceByName(getLoopback())
 		if err != nil {
 			log.WithError(err).Fatalf("Unable to find loopback interface")
 		}
 
-		l := newListener(netif, false, true, cli.Port, timeout, []string{"127.0.0.1"})
+		l := newListener(netif, false, true, cli.Port, timeout, []string{"127.0.0.1"}, cli.KeepSourceIP)
 		listeners = append(listeners, l)
 	}
 
@@ -124,14 +156,18 @@ func main() {
 		}
 	}
 
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
 	// start handling packets
 	var wg sync.WaitGroup
 	spf := SendPktFeed{}
 	log.Debug("Initialization complete!")
 	for i := range listeners {
 		wg.Add(1)
-		go listeners[i].handlePackets(&spf, &wg)
+		go listeners[i].handlePackets(ctx, &spf)
 	}
+	<-ctx.Done()
+
 	wg.Wait()
 }
 

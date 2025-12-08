@@ -9,6 +9,7 @@ import (
 
 // Interfaces is a map between interface name and pcap data structure
 var Interfaces = map[string]pcap.Interface{}
+var isLocalIp = map[string]bool{}
 
 func initializeInterface(l *Listen) {
 	// find our interface via libpcap
@@ -20,27 +21,27 @@ func initializeInterface(l *Listen) {
 	// configure libpcap listener
 	inactive, err := pcap.NewInactiveHandle(l.iname)
 	if err != nil {
-		log.Fatalf("%s: %s", l.iname, err)
+		log.Fatalf("pcap.NewInactiveHandle %s: %s", l.iname, err)
 	}
 	defer inactive.CleanUp()
 
 	// set our timeout
 	if err = inactive.SetTimeout(l.timeout); err != nil {
-		log.Fatalf("%s: %s", l.iname, err)
+		log.Fatalf("inactive.SetTimeout %s: %s", l.iname, err)
 	}
 
 	// Promiscuous mode on/off
 	if err = inactive.SetPromisc(l.promisc); err != nil {
-		log.Fatalf("%s: %s", l.iname, err)
+		log.Fatalf("inactive.SetPromisc %s: %s", l.iname, err)
 	}
 	// Get the entire packet
 	if err = inactive.SetSnapLen(9000); err != nil {
-		log.Fatalf("%s: %s", l.iname, err)
+		log.Fatalf("inactive.SetSnapLen %s: %s", l.iname, err)
 	}
 
 	// activate libpcap handle
 	if l.handle, err = inactive.Activate(); err != nil {
-		log.Fatalf("%s: %s", l.iname, err)
+		log.Fatalf("inactive.Activate %s: %s", l.iname, err)
 	}
 
 	if !isValidLayerType(l.handle.LinkType()) {
@@ -51,12 +52,12 @@ func initializeInterface(l *Listen) {
 	bpf_filter := buildBPFFilter(l.ports, Interfaces[l.iname].Addresses, l.promisc)
 	log.Debugf("%s: applying BPF Filter: %s", l.iname, bpf_filter)
 	if err = l.handle.SetBPFFilter(bpf_filter); err != nil {
-		log.Fatalf("%s: %s", l.iname, err)
+		log.Fatalf("applying BPF Filter %s: %s", l.iname, err)
 	}
 
 	// just inbound packets
 	if err = l.handle.SetDirection(pcap.DirectionIn); err != nil {
-		log.Fatalf("%s: %s", l.iname, err)
+		log.Warnf("SetDirection %s: %s", l.iname, err)
 	}
 
 	log.Debugf("Opened pcap handle on %s", l.iname)
@@ -77,6 +78,11 @@ func getConfiguredInterfaces() {
 			continue
 		}
 		Interfaces[i.Name] = i
+		for _, v := range i.Addresses {
+			if v.IP.To4() != nil {
+				isLocalIp[v.IP.To4().String()] = true
+			}
+		}
 	}
 }
 
@@ -106,7 +112,7 @@ func getLoopback() string {
 	getConfiguredInterfaces()
 	for k, v := range Interfaces {
 		for _, a := range v.Addresses {
-			if a.IP.String() == "127.0.0.1" {
+			if a.IP.IsLoopback() {
 				return k
 			}
 		}
