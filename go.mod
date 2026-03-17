@@ -5,7 +5,7 @@ go 1.24.7
 require (
 	github.com/alecthomas/kong v1.13.0
 	github.com/davecgh/go-spew v1.1.1
-	github.com/gopacket/gopacket v1.4.0
+	github.com/gopacket/gopacket v1.5.0
 	github.com/sirupsen/logrus v1.9.4
 	golang.org/x/net v0.39.0 // indirect; security
 )
