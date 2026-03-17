@@ -311,37 +311,37 @@ jobs:
 
     steps:
       - name: Download binaries linux-arm32
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: build-files-linux-arm32
           path: dist/
 
       - name: Download binaries linux-aarch64
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: build-files-linux-aarch64
           path: dist/
 
       - name: Download binaries linux-amd64
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: build-files-linux-amd64
           path: dist/
 
       - name: Download binaries linux-mips64
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: build-files-linux-mips64
           path: dist/
 
       - name: Download binaries macos
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: build-files-macos
           path: dist/
 
       - name: Download binaries freebsd
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: build-files-freebsd
           path: dist/
