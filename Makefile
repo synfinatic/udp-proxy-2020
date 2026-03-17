@@ -4,7 +4,7 @@ GOARCH ?= $(shell uname -m | sed -E 's/x86_64/amd64/')
 BUILDINFOSDET ?=
 UDP_PROXY_2020_ARGS ?=
 
-PROJECT_VERSION    := 0.1.0
+PROJECT_VERSION    := 0.1.3
 DOCKER_REPO        := synfinatic
 PROJECT_NAME       := udp-proxy-2020
 PROJECT_TAG        := $(shell git describe --tags 2>/dev/null $(git rev-list --tags --max-count=1))
@@ -27,7 +27,7 @@ LDFLAGS            += -X "main.Buildinfos=$(BUILDINFOS)" -X "main.Tag=$(PROJECT_
 LDFLAGS            += -X "main.CommitID=$(PROJECT_COMMIT)" -s -w
 OUTPUT_NAME        := $(DIST_DIR)$(PROJECT_NAME)-$(GOOS)-$(GOARCH)
 DOCKER_VERSION     ?= v$(PROJECT_VERSION)
-FREEBSD_VERSION    := 14.2
+FREEBSD_VERSION    := 14.3
 
 ALL: $(OUTPUT_NAME)
 

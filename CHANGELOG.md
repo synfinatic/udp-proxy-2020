@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v0.1.3 -- 2026-03-16
+
+Changed:
+- Properly bump version
+
 ## v0.1.2 -- 2025-09-09
 
 Changed:
