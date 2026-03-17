@@ -24,7 +24,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: ${{vars.GO_VERSION}}
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
