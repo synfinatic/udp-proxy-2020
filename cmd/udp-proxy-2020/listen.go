@@ -308,7 +308,7 @@ func (l *Listen) buildPacket(sndpkt Send, dstip net.IP, eth layers.Ethernet, loo
 	// UDP checksums can't be calculated via SerializeOptions
 	// because it requires the IP pseudo-header:
 	// https://en.wikipedia.org/wiki/User_Datagram_Protocol#IPv4_pseudo_header
-	payload_len, err := safecast.ToUint16(len(payload))
+	payload_len, err := safecast.Convert[uint16](len(payload))
 	if err != nil {
 		log.Fatalf("invalid payload length: %d", len(payload))
 	}
