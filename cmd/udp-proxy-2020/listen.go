@@ -316,8 +316,8 @@ func (l *Listen) buildPacket(sndpkt Send, dstip net.IP, eth layers.Ethernet, loo
 	new_udp := layers.UDP{
 		SrcPort:  udp.SrcPort,
 		DstPort:  udp.DstPort,
-		Checksum: 0, // but 0 is always valid for UDP
-		Length:   payload_len,
+		Checksum: 0,                       // but 0 is always valid for UDP
+		Length:   uint16(payload_len + 8), // 8 is the length of the UDP header
 	}
 
 	if err := new_udp.SerializeTo(buffer, opts); err != nil {
