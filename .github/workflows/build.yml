@@ -82,7 +82,7 @@ jobs:
 
         # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
         - name: Upload files as artifact
-          uses: actions/upload-artifact@v5
+          uses: actions/upload-artifact@v7
           with:
             name: build-files-linux-arm32
             path: dist/udp-proxy-2020*
@@ -116,7 +116,7 @@ jobs:
 
         # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
         - name: Upload files as artifact
-          uses: actions/upload-artifact@v5
+          uses: actions/upload-artifact@v7
           with:
             name: build-files-linux-arm64
             path: dist/udp-proxy-2020*
@@ -161,7 +161,7 @@ jobs:
 
         # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
         - name: Upload files as artifact
-          uses: actions/upload-artifact@v5
+          uses: actions/upload-artifact@v7
           with:
             name: build-files-linux-amd64
             path: dist/udp-proxy-2020*
@@ -216,7 +216,7 @@ jobs:
 
         # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
         - name: Upload files as artifact
-          uses: actions/upload-artifact@v5
+          uses: actions/upload-artifact@v7
           with:
             name: build-files-linux-mips64
             path: dist/udp-proxy-2020*
@@ -256,7 +256,7 @@ jobs:
 
         # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
         - name: Upload files as artifact
-          uses: actions/upload-artifact@v5
+          uses: actions/upload-artifact@v7
           with:
             name: build-files-darwin
             path: dist/udp-proxy-2020*
@@ -288,7 +288,7 @@ jobs:
 
         # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
         - name: Upload files as artifact
-          uses: actions/upload-artifact@v5
+          uses: actions/upload-artifact@v7
           with:
             name: build-files-freebsd
             path: dist/udp-proxy-2020*
