@@ -9,7 +9,8 @@ on:
 env:
   GO_VERSION: '${{ vars.GO_VERSION }}'
   LIBPCAP_VERSION: 1.10.3
-  FREEBSD_VERSION: 14.2
+  # match to opnsense 26.1.2
+  FREEBSD_VERSION: 14.3
 
 jobs:
   linux-arm32:
