@@ -80,6 +80,13 @@ jobs:
           run: |
             make .linux-arm32
 
+        # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
+        - name: Upload files as artifact
+          uses: actions/upload-artifact@v5
+          with:
+            name: build-files-linux-arm32
+            path: dist/udp-proxy-2020*
+
   linux-aarch64:
     name: Linux ARM64
     runs-on: ubuntu-24.04-arm
@@ -106,6 +113,13 @@ jobs:
         - name: Build ARM64 Binary
           run: |
             make .linux-arm
+
+        # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
+        - name: Upload files as artifact
+          uses: actions/upload-artifact@v5
+          with:
+            name: build-files-linux-arm64
+            path: dist/udp-proxy-2020*
 
   linux-amd64:
     name: Linux x86
@@ -144,6 +158,13 @@ jobs:
         - name: Create Deb/RPM packages
           run: |
             make package
+
+        # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
+        - name: Upload files as artifact
+          uses: actions/upload-artifact@v5
+          with:
+            name: build-files-linux-amd64
+            path: dist/udp-proxy-2020*
 
   linux-mips64:
     name: Linux MIPS64
@@ -193,6 +214,13 @@ jobs:
           run: |
             make .linux-mips64
 
+        # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
+        - name: Upload files as artifact
+          uses: actions/upload-artifact@v5
+          with:
+            name: build-files-linux-mips64
+            path: dist/udp-proxy-2020*
+
   macos:
     name: MacOS x86
     runs-on: macos-latest
@@ -225,6 +253,14 @@ jobs:
           run: |
             make darwin
 
+
+        # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
+        - name: Upload files as artifact
+          uses: actions/upload-artifact@v5
+          with:
+            name: build-files-darwin
+            path: dist/udp-proxy-2020*
+
   freebsd:
     name: FreeBSD x86/ARM
     runs-on: ubuntu-latest
@@ -249,3 +285,10 @@ jobs:
                 # fix for "fatal: detected dubious ownership in repository"
                 git config --global --add safe.directory /home/runner/work/udp-proxy-2020/udp-proxy-2020
                 FREEBSD_VERSION=${{ env.FREEBSD_VERSION }} gmake freebsd-binaries
+
+        # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
+        - name: Upload files as artifact
+          uses: actions/upload-artifact@v5
+          with:
+            name: build-files-freebsd
+            path: dist/udp-proxy-2020*
