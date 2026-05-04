@@ -1,4 +1,4 @@
-FROM ubuntu:22.04 AS base
+FROM ubuntu:24.04 AS base
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y git wget && apt-get clean
 RUN wget -q https://go.dev/dl/go1.24.7.linux-amd64.tar.gz -O - |  tar -C /usr/local -xzf -
