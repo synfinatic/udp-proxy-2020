@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"time"
 )
 
 // Pipeline orchestrates the flow of packets from a Source through Processors to Sinks.
@@ -49,6 +50,8 @@ func (p *Pipeline) Run(ctx context.Context) error {
 			}
 
 			if pkt == nil {
+				// Avoid busy loop if Source.Read returns nil
+				time.Sleep(10 * time.Millisecond)
 				continue
 			}
 

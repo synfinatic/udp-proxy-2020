@@ -29,20 +29,28 @@ func NewPcapSource(handle *pcap.Handle, iname string) *PcapSource {
 
 // Read reads the next packet from the PCAP handle.
 func (s *PcapSource) Read() (*proxy.Packet, error) {
-	p, ok := <-s.packets
-	if !ok {
-		return nil, io.EOF
-	}
+	select {
+	case p, ok := <-s.packets:
+		if !ok {
+			return nil, io.EOF
+		}
 
-	return &proxy.Packet{
-		Raw:              p.Data(),
-		Metadata:         p.Metadata().CaptureInfo,
-		Packet:           p,
-		ArrivalInterface: s.iname,
-	}, nil
+		return &proxy.Packet{
+			Raw:              p.Data(),
+			Metadata:         p.Metadata().CaptureInfo,
+			Packet:           p,
+			ArrivalInterface: s.iname,
+		}, nil
+	default:
+		// Return nil, nil to allow context check in Pipeline.Run
+		return nil, nil
+	}
 }
 
-// Close is a no-op as the handle might be shared, but satisfies the interface.
+// Close closes the underlying pcap handle.
 func (s *PcapSource) Close() error {
+	if s.handle != nil {
+		s.handle.Close()
+	}
 	return nil
 }
