@@ -32,7 +32,10 @@ func (t *TransformProcessor) Process(pkt *proxy.Packet) (bool, error) {
 	ipv4.DstIP = t.DestinationIP
 
 	// Reset checksums for recalculation
-	udp.SetNetworkLayerForChecksum(ipv4)
+	err := udp.SetNetworkLayerForChecksum(ipv4)
+	if err != nil {
+		return false, err
+	}
 
 	// In a real implementation, we might use a SerializeBuffer here
 	// or modify the layers in place if gopacket supports it for the specific handles.

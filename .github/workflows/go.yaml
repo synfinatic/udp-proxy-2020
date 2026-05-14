@@ -12,10 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go ${{vars.GO_VERSION}}
+    - name: Set up Go
       uses: actions/setup-go@v6
       with:
-        go-version: ${{vars.GO_VERSION}}
+        go-version-file: 'go.mod'
       id: go
 
     - name: Check out code into the Go module directory
