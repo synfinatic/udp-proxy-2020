@@ -231,10 +231,9 @@ func setupPipelines(cli CLI, dm *proxy.DeviceManager, bus *proxy.PacketBus, time
 		busChan := make(chan proxy.BusMessage, 100)
 		bus.Subscribe(iname, busChan)
 
-		// Broadcast address discovery
+		// Broadcast address discovery (reuse addrs already fetched above)
 		var bcast net.IP
-		pcapAddrs, _ := dm.GetAddresses(iname)
-		for _, addr := range pcapAddrs {
+		for _, addr := range addrs {
 			if addr.IP.To4() != nil && addr.Broadaddr != nil {
 				bcast = addr.Broadaddr
 				break

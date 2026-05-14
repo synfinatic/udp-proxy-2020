@@ -1,6 +1,7 @@
 package stages
 
 import (
+	"context"
 	"io"
 
 	"github.com/gopacket/gopacket"
@@ -28,8 +29,10 @@ func NewPcapSource(handle *pcap.Handle, iname string) *PcapSource {
 }
 
 // Read reads the next packet from the PCAP handle.
-func (s *PcapSource) Read() (*proxy.Packet, error) {
+func (s *PcapSource) Read(ctx context.Context) (*proxy.Packet, error) {
 	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case p, ok := <-s.packets:
 		if !ok {
 			return nil, io.EOF
@@ -41,9 +44,6 @@ func (s *PcapSource) Read() (*proxy.Packet, error) {
 			Packet:           p,
 			ArrivalInterface: s.iname,
 		}, nil
-	default:
-		// Return nil, nil to allow context check in Pipeline.Run
-		return nil, nil
 	}
 }
 

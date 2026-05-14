@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"context"
+
 	"github.com/gopacket/gopacket"
 )
 
@@ -18,7 +20,7 @@ type Packet struct {
 
 // Source is an interface for reading packets from a network device or file.
 type Source interface {
-	Read() (*Packet, error)
+	Read(ctx context.Context) (*Packet, error)
 	Close() error
 }
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"log/slog"
-	"time"
 )
 
 // Pipeline orchestrates the flow of packets from a Source through Processors to Sinks.
@@ -36,49 +35,42 @@ func (p *Pipeline) Run(ctx context.Context) error {
 	defer p.closeAll()
 
 	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			pkt, err := p.Source.Read()
+		pkt, err := p.Source.Read(ctx)
+		if err != nil {
+			if err == io.EOF || err == context.Canceled {
+				return nil
+			}
+			slog.Error("Source read error", "error", err)
+			continue
+		}
+
+		if pkt == nil {
+			continue
+		}
+
+		// Process packet through processors
+		continueProcessing := true
+		for _, proc := range p.Processors {
+			keep, err := proc.Process(pkt)
 			if err != nil {
-				if err == io.EOF {
-					return nil
-				}
-				slog.Error("Source read error", "error", err)
-				continue
+				slog.Error("Processor error", "error", err)
+				continueProcessing = false
+				break
 			}
-
-			if pkt == nil {
-				// Avoid busy loop if Source.Read returns nil
-				time.Sleep(10 * time.Millisecond)
-				continue
+			if !keep {
+				continueProcessing = false
+				break
 			}
+		}
 
-			// Process packet through processors
-			continueProcessing := true
-			for _, proc := range p.Processors {
-				keep, err := proc.Process(pkt)
-				if err != nil {
-					slog.Error("Processor error", "error", err)
-					continueProcessing = false
-					break
-				}
-				if !keep {
-					continueProcessing = false
-					break
-				}
-			}
+		if !continueProcessing {
+			continue
+		}
 
-			if !continueProcessing {
-				continue
-			}
-
-			// Write to sinks
-			for _, sink := range p.Sinks {
-				if err := sink.Write(pkt); err != nil {
-					slog.Error("Sink write error", "error", err)
-				}
+		// Write to sinks
+		for _, sink := range p.Sinks {
+			if err := sink.Write(pkt); err != nil {
+				slog.Error("Sink write error", "error", err)
 			}
 		}
 	}
