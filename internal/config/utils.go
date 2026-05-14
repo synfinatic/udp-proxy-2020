@@ -14,18 +14,17 @@ func BuildBPFFilter(ports []int32, addresses []pcap.InterfaceAddress) string {
 	if len(ports) < 1 {
 		return ""
 	}
-	var bpfFilters = []string{}
-	for _, p := range ports {
-		bpfFilters = append(bpfFilters, fmt.Sprintf("udp port %d", p))
-	}
-	var bpfFilter string
-	if len(ports) > 1 {
-		bpfFilter = strings.Join(bpfFilters, " or ")
-	} else {
-		bpfFilter = bpfFilters[0]
+	var bpfPortFilters = make([]string, len(ports))
+	for i, p := range ports {
+		bpfPortFilters[i] = fmt.Sprintf("udp port %d", p)
 	}
 
-	networks := []string{}
+	bpfFilter := strings.Join(bpfPortFilters, " or ")
+	if len(bpfPortFilters) > 1 {
+		bpfFilter = "(" + bpfFilter + ")"
+	}
+
+	var networks []string
 	for _, addr := range addresses {
 		if netStr, err := GetNetwork(addr); err == nil {
 			if maskLen, _ := addr.Netmask.Size(); maskLen > 0 {
@@ -35,7 +34,10 @@ func BuildBPFFilter(ports []int32, addresses []pcap.InterfaceAddress) string {
 	}
 	if len(networks) >= 1 {
 		networkFilter := strings.Join(networks, " or ")
-		bpfFilter = fmt.Sprintf("(%s) and (%s)", bpfFilter, networkFilter)
+		if len(networks) > 1 {
+			networkFilter = "(" + networkFilter + ")"
+		}
+		bpfFilter = fmt.Sprintf("%s and %s", bpfFilter, networkFilter)
 	}
 
 	return bpfFilter

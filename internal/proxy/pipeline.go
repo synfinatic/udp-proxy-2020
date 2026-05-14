@@ -16,9 +16,7 @@ type Pipeline struct {
 // NewPipeline creates a new pipeline with the given source.
 func NewPipeline(source Source) *Pipeline {
 	return &Pipeline{
-		Source:     source,
-		Processors: make([]Processor, 0),
-		Sinks:      make([]Sink, 0),
+		Source: source,
 	}
 }
 

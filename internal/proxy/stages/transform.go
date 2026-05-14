@@ -1,6 +1,10 @@
 package stages
 
 import (
+	"fmt"
+	"net"
+
+	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	"github.com/synfinatic/udp-proxy-2020/internal/proxy"
 )
@@ -8,14 +12,13 @@ import (
 // TransformProcessor handles packet editing (IP/UDP header modifications).
 type TransformProcessor struct {
 	// DestinationIP is the IP to set on outgoing packets.
-	DestinationIP []byte
+	DestinationIP net.IP
 }
 
 func (t *TransformProcessor) Process(pkt *proxy.Packet) (bool, error) {
 	// Re-calculating checksums and modifying the packet.
-	// This mirrors the logic in buildPacket but as a pipeline stage.
-
 	packet := pkt.Packet
+
 	ipLayer := packet.Layer(layers.LayerTypeIPv4)
 	if ipLayer == nil {
 		return false, nil
@@ -31,15 +34,41 @@ func (t *TransformProcessor) Process(pkt *proxy.Packet) (bool, error) {
 	// Update destination IP
 	ipv4.DstIP = t.DestinationIP
 
-	// Reset checksums for recalculation
-	err := udp.SetNetworkLayerForChecksum(ipv4)
-	if err != nil {
-		return false, err
+	// We need to re-serialize the packet to update checksums and the raw byte slice
+	opts := gopacket.SerializeOptions{
+		FixLengths:       true,
+		ComputeChecksums: true,
 	}
 
-	// In a real implementation, we might use a SerializeBuffer here
-	// or modify the layers in place if gopacket supports it for the specific handles.
-	// For the purposes of this refactor, we are defining the logical stage.
+	buffer := gopacket.NewSerializeBuffer()
+
+	// Set the network layer for the UDP checksum calculation
+	if err := udp.SetNetworkLayerForChecksum(ipv4); err != nil {
+		return false, fmt.Errorf("failed to set network layer for checksum: %w", err)
+	}
+
+	// Re-serialize the layers. Note: we are currently only handling IPv4/UDP.
+	// We use the application layer (payload) and work outwards.
+	payload := packet.ApplicationLayer()
+	if payload == nil {
+		return false, nil
+	}
+
+	err := gopacket.SerializeLayers(buffer, opts,
+		ipv4,
+		udp,
+		gopacket.Payload(payload.Payload()),
+	)
+	if err != nil {
+		return false, fmt.Errorf("failed to serialize layers: %w", err)
+	}
+
+	// Update the proxy.Packet with the new raw data
+	pkt.Raw = buffer.Bytes()
+
+	// We don't overwrite pkt.Packet here because the Sinks currently rely on
+	// the original decoded layers for logic (like checking LinkType),
+	// but the raw data is what actually gets transmitted.
 
 	return true, nil
 }
