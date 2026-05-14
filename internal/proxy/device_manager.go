@@ -81,10 +81,26 @@ func (dm *DeviceManager) CreateHandle(iname string, promisc bool, timeout time.D
 		return nil, err
 	}
 
+	if !dm.isValidLinkType(handle.LinkType()) {
+		handle.Close()
+		return nil, fmt.Errorf("interface %s has an unsupported link type: %s", iname, handle.LinkType())
+	}
+
 	// Default to inbound only
-	_ = handle.SetDirection(pcap.DirectionIn)
+	if err := handle.SetDirection(pcap.DirectionIn); err != nil {
+		handle.Close()
+		return nil, fmt.Errorf("failed to set direction on interface %s: %w", iname, err)
+	}
 
 	return handle, nil
+}
+
+func (dm *DeviceManager) isValidLinkType(lt layers.LinkType) bool {
+	switch lt {
+	case layers.LinkTypeLoop, layers.LinkTypeEthernet, layers.LinkTypeNull, layers.LinkTypeRaw:
+		return true
+	}
+	return false
 }
 
 // ListInterfaces prints available network interfaces.
@@ -123,13 +139,4 @@ func (dm *DeviceManager) GetLoopback() string {
 		}
 	}
 	return ""
-}
-
-// IsValidLinkType checks if the LinkType is supported by the application.
-func IsValidLinkType(lt layers.LinkType) bool {
-	switch lt {
-	case layers.LinkTypeLoop, layers.LinkTypeEthernet, layers.LinkTypeNull, layers.LinkTypeRaw:
-		return true
-	}
-	return false
 }

@@ -69,7 +69,8 @@ func main() {
         registry, _ := stages.NewRegistryProcessor(180 * time.Minute, fixedIPs[iname])
 
         // 4. Create Pipeline Source
-        pipeline := proxy.NewPipeline(stages.NewPcapSource(handle, iname))
+        pcapSource := stages.NewPcapSource(handle, iname)
+        pipeline := proxy.NewPipeline(pcapSource)
 
         // 5. Add Processors
         pipeline.AddProcessor(&stages.FilterProcessor{Iname: iname})

@@ -12,9 +12,9 @@ type mockSource struct {
 	index   int
 }
 
-func (m *mockSource) Read() (*Packet, error) {
+func (m *mockSource) Read(ctx context.Context) (*Packet, error) {
 	if m.index >= len(m.packets) {
-		return nil, nil // Return nil to signal end for this test or use EOF
+		return nil, context.Canceled // Return canceled to signal end for this test
 	}
 	p := m.packets[m.index]
 	m.index++
@@ -79,7 +79,7 @@ func TestPipeline_Run(t *testing.T) {
 
 func TestPipeline_ProcessorFiltering(t *testing.T) {
 	pkt := &Packet{Raw: []byte("test")}
-	source := &mockSource{packets: []*Packet{pkt, nil}} // nil signals end in mockSource
+	source := &mockSource{packets: []*Packet{pkt}}
 	sink := &mockSink{}
 
 	pipeline := NewPipeline(source)
