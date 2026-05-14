@@ -69,6 +69,7 @@ debug: .prepare ## Run debug in dlv
 
 .PHONY: unittest
 unittest: ## Run go unit tests
+	@echo running unit tests...
 	go test ./...
 
 .PHONY: test-race
@@ -81,7 +82,16 @@ vet: ## Run `go vet` on the code
 	@echo checking code is vetted...
 	go vet $(shell go list ./...)
 
-test: vet unittest ## Run all tests
+.PHONY: golangci-lint
+golangci-lint: ## Run golangci-lint on the code
+	@echo checking code with golangci-lint v$(GOLANGCI_LINT_VERSION)...
+	@which golangci-lint >/dev/null || "Please install golangci-lint: https://golangci-lint.run/usage/install/"
+	@golangci-lint run
+
+test: vet unittest golangci-lint ## Run all tests
+
+.PHONY: .build-test
+.build-test: unittest vet test-fmt test-tidy
 
 .prepare: $(DIST_DIR)
 

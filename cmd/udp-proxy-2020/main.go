@@ -42,7 +42,64 @@ type CLI struct {
 
 func main() {
 	cli := parseArgs()
-	// Setup Logging
+	setupLogging(cli)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	timeout, ttl := getDurations(cli)
+
+	dm, err := proxy.NewDeviceManager()
+	if err != nil {
+		slog.Error("Failed to initialize device manager", "error", err)
+		os.Exit(1)
+	}
+
+	if cli.ListInterfaces {
+		dm.ListInterfaces()
+		os.Exit(0)
+	}
+
+	bus := proxy.NewPacketBus()
+
+	pipelines, transmitters, registries := setupPipelines(cli, dm, bus, timeout, ttl, ctx)
+
+	// Start registry cleanup ticker
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				for _, r := range registries {
+					r.Cleanup()
+				}
+			}
+		}
+	}()
+
+	var wg sync.WaitGroup
+	for _, p := range pipelines {
+		wg.Add(1)
+		go func(pipe *proxy.Pipeline) {
+			defer wg.Done()
+			if err := pipe.Run(ctx); err != nil {
+				slog.Error("Pipeline error", "error", err)
+			}
+		}(p)
+	}
+
+	for _, t := range transmitters {
+		go t.Run()
+	}
+
+	slog.Info("All pipelines started")
+	wg.Wait()
+}
+
+func setupLogging(cli CLI) {
 	var level slog.Level
 	switch cli.Level {
 	case "trace":
@@ -76,10 +133,9 @@ func main() {
 		handler = slog.NewTextHandler(os.Stderr, opts)
 	}
 	slog.SetDefault(slog.New(handler))
+}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
+func getDurations(cli CLI) (time.Duration, time.Duration) {
 	timeout := config.ParseTimeout(cli.Timeout)
 	if cli.CacheTTL <= 0 {
 		slog.Error("CacheTTL must be a positive number of minutes")
@@ -90,33 +146,15 @@ func main() {
 		slog.Error("Invalid CacheTTL", "value", cli.CacheTTL, "error", err)
 		os.Exit(1)
 	}
+	return timeout, ttl
+}
 
-	dm, err := proxy.NewDeviceManager()
-	if err != nil {
-		slog.Error("Failed to initialize device manager", "error", err)
-		os.Exit(1)
-	}
-
-	if cli.ListInterfaces {
-		dm.ListInterfaces()
-		os.Exit(0)
-	}
-
-	bus := proxy.NewPacketBus()
-
+func setupPipelines(cli CLI, dm *proxy.DeviceManager, bus *proxy.PacketBus, timeout, ttl time.Duration, ctx context.Context) ([]*proxy.Pipeline, []*stages.TransmitterSink, []*stages.RegistryProcessor) {
 	var pipelines []*proxy.Pipeline
 	var transmitters []*stages.TransmitterSink
 	var registries []*stages.RegistryProcessor
 
-	// Check for duplicate interfaces
-	seenInterfaces := make(map[string]bool)
-	for _, iname := range cli.Interface {
-		if seenInterfaces[iname] {
-			slog.Error("Duplicate interface specified", "interface", iname)
-			os.Exit(1)
-		}
-		seenInterfaces[iname] = true
-	}
+	checkDuplicateInterfaces(cli.Interface)
 
 	interfaces := cli.Interface
 	if cli.DeliverLocal {
@@ -128,32 +166,7 @@ func main() {
 		interfaces = append(interfaces, lb)
 	}
 
-	// Group fixed IPs by interface and validate them
-	fixedIPs := make(map[string][]string)
-	for _, f := range cli.FixedIp {
-		parts := strings.Split(f, "@")
-		if len(parts) != 2 {
-			slog.Error("Invalid fixed IP format. Expected interface@ip", "value", f)
-			os.Exit(1)
-		}
-		if net.ParseIP(parts[1]) == nil {
-			slog.Error("Invalid fixed IP address", "ip", parts[1])
-			os.Exit(1)
-		}
-		// Check if the interface is in the whitelist or is loopback (if deliver-local is on)
-		validIface := false
-		for _, i := range cli.Interface {
-			if i == parts[0] {
-				validIface = true
-				break
-			}
-		}
-		if !validIface && (!cli.DeliverLocal || parts[0] != dm.GetLoopback()) {
-			slog.Error("Fixed IP interface must be active", "interface", parts[0])
-			os.Exit(1)
-		}
-		fixedIPs[parts[0]] = append(fixedIPs[parts[0]], parts[1])
-	}
+	fixedIPs := getFixedIPs(cli, dm)
 
 	for _, iname := range interfaces {
 		netif, err := net.InterfaceByName(iname)
@@ -228,13 +241,7 @@ func main() {
 			}
 		}
 		if bcast == nil && (netif.Flags&net.FlagBroadcast) != 0 {
-			slog.Warn("No broadcast address found for interface; trying to calculate from CIDR", "interface", iname)
-			for _, addr := range pcapAddrs {
-				if _, ipnet, err := net.ParseCIDR(fmt.Sprintf("%s/%s", addr.IP.String(), addr.Netmask.String())); err == nil && ipnet.IP.To4() != nil {
-					// Calculation logic removed from main; simplified for now
-					// or just flag it as a warning if it's nil
-				}
-			}
+			slog.Warn("No broadcast address found for interface", "interface", iname)
 		}
 
 		if cli.DeliverLocal && iname == dm.GetLoopback() {
@@ -261,39 +268,47 @@ func main() {
 		registries = append(registries, registry)
 	}
 
-	// Start registry cleanup ticker
-	go func() {
-		ticker := time.NewTicker(time.Minute)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				for _, r := range registries {
-					r.Cleanup()
-				}
+	return pipelines, transmitters, registries
+}
+
+func checkDuplicateInterfaces(ifaces []string) {
+	seenInterfaces := make(map[string]bool)
+	for _, iname := range ifaces {
+		if seenInterfaces[iname] {
+			slog.Error("Duplicate interface specified", "interface", iname)
+			os.Exit(1)
+		}
+		seenInterfaces[iname] = true
+	}
+}
+
+func getFixedIPs(cli CLI, dm *proxy.DeviceManager) map[string][]string {
+	fixedIPs := make(map[string][]string)
+	for _, f := range cli.FixedIp {
+		parts := strings.Split(f, "@")
+		if len(parts) != 2 {
+			slog.Error("Invalid fixed IP format. Expected interface@ip", "value", f)
+			os.Exit(1)
+		}
+		if net.ParseIP(parts[1]) == nil {
+			slog.Error("Invalid fixed IP address", "ip", parts[1])
+			os.Exit(1)
+		}
+		// Check if the interface is in the whitelist or is loopback (if deliver-local is on)
+		validIface := false
+		for _, i := range cli.Interface {
+			if i == parts[0] {
+				validIface = true
+				break
 			}
 		}
-	}()
-
-	var wg sync.WaitGroup
-	for _, p := range pipelines {
-		wg.Add(1)
-		go func(pipe *proxy.Pipeline) {
-			defer wg.Done()
-			if err := pipe.Run(ctx); err != nil {
-				slog.Error("Pipeline error", "error", err)
-			}
-		}(p)
+		if !validIface && (!cli.DeliverLocal || parts[0] != dm.GetLoopback()) {
+			slog.Error("Fixed IP interface must be active", "interface", parts[0])
+			os.Exit(1)
+		}
+		fixedIPs[parts[0]] = append(fixedIPs[parts[0]], parts[1])
 	}
-
-	for _, t := range transmitters {
-		go t.Run()
-	}
-
-	slog.Info("All pipelines started")
-	wg.Wait()
+	return fixedIPs
 }
 
 func parseArgs() CLI {

@@ -28,4 +28,4 @@ jobs:
       run: make
 
     - name: Run tests
-      run: make test test-fmt test-tidy
+      run: make .build-test

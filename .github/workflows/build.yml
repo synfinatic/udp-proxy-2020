@@ -279,7 +279,7 @@ jobs:
             prepare: |
                 pkg install -y git wget bash gmake go libpcap aarch64-gcc13 \
                 aarch64-binutils arm-gnueabi-binutils amd64-binutils \
-                armv7-freebsd-sysroot aarch64-freebsd-sysroot llvm15
+                armv7-freebsd-sysroot aarch64-freebsd-sysroot llvm15 pkgconf
             run: |
                 ls -l /usr/local/bin
                 export PATH=/usr/local/bin:$PATH
