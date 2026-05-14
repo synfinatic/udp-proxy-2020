@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/gopacket/gopacket/pcapgo"
-	log "github.com/sirupsen/logrus"
 	"github.com/synfinatic/udp-proxy-2020/internal/config"
 	"github.com/synfinatic/udp-proxy-2020/internal/proxy"
 	"github.com/synfinatic/udp-proxy-2020/internal/proxy/stages"
@@ -41,17 +41,43 @@ type CLI struct {
 	NoListen       bool     `kong:"help='Do not actively listen on UDP port(s)'"`
 }
 
-func init() {
-	log.SetFormatter(&log.TextFormatter{
-		DisableLevelTruncation: true,
-		PadLevelText:           true,
-		DisableTimestamp:       true,
-	})
-	log.SetOutput(os.Stderr)
-}
-
 func main() {
 	cli := parseArgs()
+	// Setup Logging
+	var level slog.Level
+	switch cli.Level {
+	case "trace":
+		level = slog.LevelDebug - 4
+	case "debug":
+		level = slog.LevelDebug
+	case "warn":
+		level = slog.LevelWarn
+	case "info":
+		level = slog.LevelInfo
+	case "error":
+		level = slog.LevelError
+	default:
+		level = slog.LevelInfo
+	}
+
+	opts := &slog.HandlerOptions{
+		Level:     level,
+		AddSource: cli.LogLines,
+	}
+
+	var handler slog.Handler
+	if cli.Logfile != "stderr" {
+		file, err := os.OpenFile(cli.Logfile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Unable to open log file %s: %v\n", cli.Logfile, err)
+			os.Exit(1)
+		}
+		handler = slog.NewTextHandler(file, opts)
+	} else {
+		handler = slog.NewTextHandler(os.Stderr, opts)
+	}
+	slog.SetDefault(slog.New(handler))
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -60,7 +86,8 @@ func main() {
 
 	dm, err := proxy.NewDeviceManager()
 	if err != nil {
-		log.WithError(err).Fatal("Failed to initialize device manager")
+		slog.Error("Failed to initialize device manager", "error", err)
+		os.Exit(1)
 	}
 
 	if cli.ListInterfaces {
@@ -77,7 +104,8 @@ func main() {
 	if cli.DeliverLocal {
 		lb := dm.GetLoopback()
 		if lb == "" {
-			log.Fatal("Unable to find loopback interface")
+			slog.Error("Unable to find loopback interface")
+			os.Exit(1)
 		}
 		interfaces = append(interfaces, lb)
 	}
@@ -94,19 +122,22 @@ func main() {
 	for _, iname := range interfaces {
 		netif, err := net.InterfaceByName(iname)
 		if err != nil {
-			log.WithError(err).Fatalf("Interface %s not found", iname)
+			slog.Error("Interface not found", "interface", iname, "error", err)
+			os.Exit(1)
 		}
 
 		handle, err := dm.CreateHandle(iname, (netif.Flags&net.FlagBroadcast) == 0, timeout)
 		if err != nil {
-			log.WithError(err).Fatalf("Failed to open %s", iname)
+			slog.Error("Failed to open interface", "interface", iname, "error", err)
+			os.Exit(1)
 		}
 
 		// Set BPF filter
 		addrs, _ := dm.GetAddresses(iname)
 		filter := config.BuildBPFFilter(cli.Port, addrs)
 		if err := handle.SetBPFFilter(filter); err != nil {
-			log.WithError(err).Fatalf("Failed to set BPF filter on %s", iname)
+			slog.Error("Failed to set BPF filter", "interface", iname, "error", err)
+			os.Exit(1)
 		}
 
 		registry := stages.NewRegistryProcessor(ttl, fixedIPs[iname])
@@ -170,7 +201,7 @@ func main() {
 		go func(pipe *proxy.Pipeline) {
 			defer wg.Done()
 			if err := pipe.Run(ctx); err != nil {
-				log.Errorf("Pipeline error: %v", err)
+				slog.Error("Pipeline error", "error", err)
 			}
 		}(p)
 	}
@@ -179,7 +210,7 @@ func main() {
 		go t.Run()
 	}
 
-	log.Info("All pipelines started")
+	slog.Info("All pipelines started")
 	wg.Wait()
 }
 
@@ -206,37 +237,13 @@ func parseArgs() CLI {
 		os.Exit(0)
 	}
 
-	// Setup Logging
-	switch cli.Level {
-	case "trace":
-		log.SetLevel(log.TraceLevel)
-	case "debug":
-		log.SetLevel(log.DebugLevel)
-	case "warn":
-		log.SetLevel(log.WarnLevel)
-	case "info":
-		log.SetLevel(log.InfoLevel)
-	case "error":
-		log.SetLevel(log.ErrorLevel)
-	}
-
-	if cli.LogLines {
-		log.SetReportCaller(true)
-	}
-
 	if len(cli.Interface) < 2 && !cli.ListInterfaces && !cli.Version {
-		log.Fatalf("Please specify two or more --interface")
+		fmt.Fprintf(os.Stderr, "Please specify two or more --interface\n")
+		os.Exit(1)
 	}
 	if len(cli.Port) < 1 && !cli.ListInterfaces && !cli.Version {
-		log.Fatalf("Please specify one or more --port")
-	}
-
-	if cli.Logfile != "stderr" {
-		file, err := os.OpenFile(cli.Logfile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
-		if err != nil {
-			log.WithError(err).Fatalf("Unable to open log file: %s", cli.Logfile)
-		}
-		log.SetOutput(file)
+		fmt.Fprintf(os.Stderr, "Please specify one or more --port\n")
+		os.Exit(1)
 	}
 
 	return cli

@@ -3,8 +3,7 @@ package proxy
 import (
 	"context"
 	"io"
-
-	log "github.com/sirupsen/logrus"
+	"log/slog"
 )
 
 // Pipeline orchestrates the flow of packets from a Source through Processors to Sinks.
@@ -47,7 +46,7 @@ func (p *Pipeline) Run(ctx context.Context) error {
 				if err == io.EOF {
 					return nil
 				}
-				log.Errorf("Source read error: %v", err)
+				slog.Error("Source read error", "error", err)
 				continue
 			}
 
@@ -60,7 +59,7 @@ func (p *Pipeline) Run(ctx context.Context) error {
 			for _, proc := range p.Processors {
 				keep, err := proc.Process(pkt)
 				if err != nil {
-					log.Errorf("Processor error: %v", err)
+					slog.Error("Processor error", "error", err)
 					continue
 				}
 				if !keep {
@@ -76,7 +75,7 @@ func (p *Pipeline) Run(ctx context.Context) error {
 			// Write to sinks
 			for _, sink := range p.Sinks {
 				if err := sink.Write(pkt); err != nil {
-					log.Errorf("Sink write error: %v", err)
+					slog.Error("Sink write error", "error", err)
 				}
 			}
 		}
@@ -85,11 +84,11 @@ func (p *Pipeline) Run(ctx context.Context) error {
 
 func (p *Pipeline) closeAll() {
 	if err := p.Source.Close(); err != nil {
-		log.Errorf("Error closing source: %v", err)
+		slog.Error("Error closing source", "error", err)
 	}
 	for _, sink := range p.Sinks {
 		if err := sink.Close(); err != nil {
-			log.Errorf("Error closing sink: %v", err)
+			slog.Error("Error closing sink", "error", err)
 		}
 	}
 }
