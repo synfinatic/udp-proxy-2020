@@ -9,7 +9,7 @@ broadcast/multicast  messages across VLANs and VPN connections.  Useful for
 ## Requirements
 
  * You have successfully configured udm-utilities as described
-    [here](https://github.com/boostchicken/udm-utilities/tree/master/on-boot-script)
+    [here](https://github.com/unifi-utilities/unifi-common)
 
 ## Customization
 
