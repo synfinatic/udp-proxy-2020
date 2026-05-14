@@ -21,17 +21,23 @@ jobs:
           echo "GOARCH=amd64" >> $GITHUB_ENV
       - name: Install deps
         run: sudo apt-get update && sudo apt-get install -y libpcap0.8 libpcap0.8-dev
-      - uses: actions/setup-go@v6
+     
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
-      - uses: actions/checkout@v6
       - name: Get golangci-lint version
         run: echo "GOLANGCI_LINT_VERSION=$(make .print-golangci-lint-version)" >> $GITHUB_ENV
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
           # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
-          version: v2.4.0
+          version: '${{ env.GOLANGCI_LINT_VERSION }}'
 
           # Optional: working directory, useful for monorepos
           # working-directory: somedir
