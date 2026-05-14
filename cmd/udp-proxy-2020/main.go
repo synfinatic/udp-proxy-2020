@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"slices"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/alecthomas/kong"
+	"github.com/gopacket/gopacket/pcapgo"
 	log "github.com/sirupsen/logrus"
 	"github.com/synfinatic/udp-proxy-2020/internal/config"
 	"github.com/synfinatic/udp-proxy-2020/internal/proxy"
@@ -51,131 +52,134 @@ func init() {
 
 func main() {
 	cli := parseArgs()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	// handle our timeout
 	timeout := config.ParseTimeout(cli.Timeout)
-
-	var fixed_ip = map[string][]string{}
-	for _, fip := range cli.FixedIp {
-		split := strings.Split(fip, "@")
-		if len(split) != 2 {
-			log.Fatalf("--fixed-ip %s is not in the correct format of <interface>@<ip>", fip)
-		}
-		if net.ParseIP(split[1]) == nil {
-			log.Fatalf("--fixed-ip %s IP address is not a valid IPv4 address", fip)
-		}
-		if !slices.Contains(cli.Interface, split[0]) {
-			log.Fatalf("--fixed-ip %s interface must be specified via --interface", fip)
-		}
-		fixed_ip[split[0]] = append(fixed_ip[split[0]], split[1])
-	}
-
-	// create our Listeners
-	var seenInterfaces = []string{}
-	var listeners = []Listen{}
-	for _, iface := range cli.Interface {
-		// check for duplicates
-		if slices.ContainsFunc(seenInterfaces, func(s string) bool { return strings.HasPrefix(iface, s) }) {
-			log.Fatalf("Can't specify the same interface (%s) multiple times", iface)
-		}
-		seenInterfaces = append(seenInterfaces, iface)
-
-		netif, err := net.InterfaceByName(iface)
-		if err != nil {
-			log.WithError(err).Fatalf("Unable to find interface: %s", iface)
-		}
-
-		var promisc = (netif.Flags & net.FlagBroadcast) == 0
-		l := newListener(netif, promisc, false, cli.Port, timeout, fixed_ip[iface])
-		listeners = append(listeners, l)
-	}
-
-	if cli.DeliverLocal {
-		// Create loopback listener
-		netif, err := net.InterfaceByName(getLoopback())
-		if err != nil {
-			log.WithError(err).Fatalf("Unable to find loopback interface")
-		}
-
-		l := newListener(netif, false, true, cli.Port, timeout, []string{"127.0.0.1"})
-		listeners = append(listeners, l)
-	}
-
-	// init each listener
 	ttl, _ := time.ParseDuration(fmt.Sprintf("%dm", cli.CacheTTL))
-	for i := range listeners {
-		initializeInterface(&listeners[i])
+
+	dm, err := proxy.NewDeviceManager()
+	if err != nil {
+		log.WithError(err).Fatal("Failed to initialize device manager")
+	}
+
+	if cli.ListInterfaces {
+		dm.ListInterfaces()
+		os.Exit(0)
+	}
+
+	bus := proxy.NewPacketBus()
+
+	var pipelines []*proxy.Pipeline
+	var transmitters []*stages.TransmitterSink
+
+	interfaces := cli.Interface
+	if cli.DeliverLocal {
+		lb := dm.GetLoopback()
+		if lb == "" {
+			log.Fatal("Unable to find loopback interface")
+		}
+		interfaces = append(interfaces, lb)
+	}
+
+	// Group fixed IPs by interface
+	fixedIPs := make(map[string][]string)
+	for _, f := range cli.FixedIp {
+		parts := strings.Split(f, "@")
+		if len(parts) == 2 {
+			fixedIPs[parts[0]] = append(fixedIPs[parts[0]], parts[1])
+		}
+	}
+
+	for _, iname := range interfaces {
+		netif, err := net.InterfaceByName(iname)
+		if err != nil {
+			log.WithError(err).Fatalf("Interface %s not found", iname)
+		}
+
+		handle, err := dm.CreateHandle(iname, (netif.Flags&net.FlagBroadcast) == 0, timeout)
+		if err != nil {
+			log.WithError(err).Fatalf("Failed to open %s", iname)
+		}
+
+		// Set BPF filter
+		addrs, _ := dm.GetAddresses(iname)
+		filter := config.BuildBPFFilter(cli.Port, addrs)
+		if err := handle.SetBPFFilter(filter); err != nil {
+			log.WithError(err).Fatalf("Failed to set BPF filter on %s", iname)
+		}
+
+		registry := stages.NewRegistryProcessor(ttl, fixedIPs[iname])
+
+		pipeline := proxy.NewPipeline(stages.NewPcapSource(handle, iname))
+		pipeline.AddProcessor(&stages.FilterProcessor{Iname: iname})
+		pipeline.AddProcessor(registry)
+
+		// Pcap file logging
 		if cli.Pcap {
-			if fName, err := listeners[i].OpenWriter(cli.PcapPath, In); err != nil {
-				log.Fatalf("Unable to open pcap file %s: %s", fName, err.Error())
-			}
-			if fName, err := listeners[i].OpenWriter(cli.PcapPath, Out); err != nil {
-				log.Fatalf("Unable to open pcap file %s: %s", fName, err.Error())
-			}
-			if fName, err := listeners[i].OpenWriter(cli.PcapPath, InOut); err != nil {
-				log.Fatalf("Unable to open pcap file %s: %s", fName, err.Error())
+			fPath := filepath.Join(cli.PcapPath, fmt.Sprintf("udp-proxy-in-%s.pcap", iname))
+			f, err := os.Create(fPath)
+			if err == nil {
+				w := pcapgo.NewWriter(f)
+				w.WriteFileHeader(65536, handle.LinkType())
+				pipeline.AddSink(&stages.PcapFileSink{Writer: w})
 			}
 		}
-		listeners[i].clientTTL = ttl
-		defer listeners[i].handle.Close()
-	}
 
-	// Sink broadcast messages
-	if !cli.NoListen {
-		for _, l := range listeners {
-			if err := l.SinkUdpPackets(); err != nil {
-				log.WithError(err).Fatalf("Unable to init SinkUdpPackets")
+		// Forwarding to bus
+		pipeline.AddSink(&stages.ForwardingSink{
+			Feed:     bus,
+			Iname:    iname,
+			LinkType: handle.LinkType(),
+		})
+
+		// Broadcaster for this interface
+		busChan := make(chan proxy.BusMessage, 100)
+		bus.Subscribe(iname, busChan)
+
+		// Broadcast address discovery
+		var bcast net.IP
+		pcapAddrs, _ := dm.GetAddresses(iname)
+		for _, addr := range pcapAddrs {
+			if addr.IP.To4() != nil && addr.Broadaddr != nil {
+				bcast = addr.Broadaddr
+				break
 			}
 		}
+		if cli.DeliverLocal && iname == dm.GetLoopback() {
+			bcast = net.ParseIP("127.0.0.1")
+		}
+
+		transmitter := &stages.TransmitterSink{
+			Handle:           handle,
+			Iname:            iname,
+			HardwareAddr:     netif.HardwareAddr,
+			Promisc:          (netif.Flags & net.FlagBroadcast) == 0,
+			BroadcastAddress: bcast,
+			PacketBus:        busChan,
+			Registry:         registry,
+		}
+
+		pipelines = append(pipelines, pipeline)
+		transmitters = append(transmitters, transmitter)
 	}
 
-	// start handling packets
 	var wg sync.WaitGroup
-	spf := SendPktFeed{}
-	log.Debug("Initialization complete!")
-	for i := range listeners {
+	for _, p := range pipelines {
 		wg.Add(1)
-		go func(l *Listen) {
+		go func(pipe *proxy.Pipeline) {
 			defer wg.Done()
-
-			// New pipeline-based approach
-			p := proxy.NewPipeline(stages.NewPcapSource(l.handle, l.iname))
-
-			// Filter stage
-			p.AddProcessor(&stages.FilterProcessor{Iname: l.iname})
-
-			// Registry (Learning) stage
-			p.AddProcessor(stages.NewRegistryProcessor(l.clientTTL, fixed_ip[l.iname]))
-
-			// Pcap debug sink
-			if cli.Pcap && l.inwriter != nil {
-				p.AddSink(&stages.PcapFileSink{Writer: l.inwriter})
+			if err := pipe.Run(ctx); err != nil {
+				log.Errorf("Pipeline error: %v", err)
 			}
-
-			// Forwarding sink
-			p.AddSink(&stages.ForwardingSink{
-				Feed:     &spf,
-				Iname:    l.iname,
-				LinkType: l.handle.LinkType(),
-			})
-
-			// Add registration to spf
-			spf.RegisterSender(l.sendpkt, l.iname)
-
-			// Separate goroutine for sending outbound packets?
-			// Existing design uses l.sendpkt channel.
-			// For now, keep the loop that reads from l.sendpkt in another goroutine or here.
-			go func() {
-				for s := range l.sendpkt {
-					l.sendPackets(s)
-				}
-			}()
-
-			if err := p.Run(context.Background()); err != nil {
-				log.Errorf("%s: pipeline error: %v", l.iname, err)
-			}
-		}(&listeners[i])
+		}(p)
 	}
+
+	for _, t := range transmitters {
+		go t.Run()
+	}
+
+	log.Info("All pipelines started")
 	wg.Wait()
 }
 
@@ -220,15 +224,10 @@ func parseArgs() CLI {
 		log.SetReportCaller(true)
 	}
 
-	if cli.ListInterfaces {
-		listInterfaces()
-		os.Exit(0)
-	}
-
-	if len(cli.Interface) < 2 {
+	if len(cli.Interface) < 2 && !cli.ListInterfaces && !cli.Version {
 		log.Fatalf("Please specify two or more --interface")
 	}
-	if len(cli.Port) < 1 {
+	if len(cli.Port) < 1 && !cli.ListInterfaces && !cli.Version {
 		log.Fatalf("Please specify one or more --port")
 	}
 
