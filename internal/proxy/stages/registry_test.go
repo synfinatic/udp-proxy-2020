@@ -10,7 +10,10 @@ import (
 )
 
 func TestRegistryProcessor(t *testing.T) {
-	reg := NewRegistryProcessor(100*time.Millisecond, nil)
+	reg, err := NewRegistryProcessor(100*time.Millisecond, nil)
+	if err != nil {
+		t.Fatalf("NewRegistryProcessor failed: %v", err)
+	}
 
 	// Mock packet with IPv4 layer
 	ip := &layers.IPv4{SrcIP: []byte{192, 168, 1, 1}}
@@ -24,7 +27,7 @@ func TestRegistryProcessor(t *testing.T) {
 		t.Fatalf("Process failed: %v", err)
 	}
 
-	if _, ok := reg.Clients["192.168.1.1"]; !ok {
+	if !reg.Has("192.168.1.1") {
 		t.Error("Expected IP 192.168.1.1 to be in registry")
 	}
 
@@ -32,8 +35,15 @@ func TestRegistryProcessor(t *testing.T) {
 	time.Sleep(150 * time.Millisecond)
 	reg.Cleanup()
 
-	if _, ok := reg.Clients["192.168.1.1"]; ok {
+	if reg.Has("192.168.1.1") {
 		t.Error("Expected IP 192.168.1.1 to be cleaned up")
+	}
+}
+
+func TestNewRegistryProcessor_InvalidIP(t *testing.T) {
+	_, err := NewRegistryProcessor(time.Minute, []string{"not-an-ip"})
+	if err == nil {
+		t.Error("Expected error for invalid fixed IP, got nil")
 	}
 }
 

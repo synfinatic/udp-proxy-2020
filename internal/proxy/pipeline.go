@@ -58,7 +58,8 @@ func (p *Pipeline) Run(ctx context.Context) error {
 				keep, err := proc.Process(pkt)
 				if err != nil {
 					slog.Error("Processor error", "error", err)
-					continue
+					continueProcessing = false
+					break
 				}
 				if !keep {
 					continueProcessing = false

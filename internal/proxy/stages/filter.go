@@ -17,8 +17,8 @@ func (f *FilterProcessor) Process(pkt *proxy.Packet) (bool, error) {
 		return false, nil
 	}
 
-	if err := pkt.Packet.ErrorLayer(); err != nil {
-		return false, err.Error()
+	if pkt.Packet.ErrorLayer() != nil {
+		return false, nil
 	}
 
 	return true, nil

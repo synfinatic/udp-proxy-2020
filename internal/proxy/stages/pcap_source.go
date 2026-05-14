@@ -1,6 +1,8 @@
 package stages
 
 import (
+	"io"
+
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/pcap"
 	"github.com/synfinatic/udp-proxy-2020/internal/proxy"
@@ -29,7 +31,7 @@ func NewPcapSource(handle *pcap.Handle, iname string) *PcapSource {
 func (s *PcapSource) Read() (*proxy.Packet, error) {
 	p, ok := <-s.packets
 	if !ok {
-		return nil, nil // Or return io.EOF if appropriate
+		return nil, io.EOF
 	}
 
 	return &proxy.Packet{

@@ -56,6 +56,8 @@ func (s *TransmitterSink) transmit(msg proxy.BusMessage) {
 				slog.Warn("Unable to send packet to client", "from", msg.Packet.ArrivalInterface, "client", clientIP, "to_interface", s.Iname, "error", err)
 			}
 		}
+	} else {
+		slog.Warn("Promisc mode but no registry configured, dropping packet", "interface", s.Iname)
 	}
 }
 
@@ -77,7 +79,7 @@ func (s *TransmitterSink) decodePacket(msg proxy.BusMessage, eth *layers.Etherne
 	}
 
 	decoded := []gopacket.LayerType{}
-	if err := parser.DecodeLayers(msg.Packet.Packet.Data(), &decoded); err != nil {
+	if err := parser.DecodeLayers(msg.Packet.Raw, &decoded); err != nil {
 		slog.Warn("Unable to decode packet", "from", msg.Packet.ArrivalInterface, "error", err)
 		return false
 	}
