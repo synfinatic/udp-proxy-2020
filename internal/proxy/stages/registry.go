@@ -1,6 +1,7 @@
 package stages
 
 import (
+	"net"
 	"sync"
 	"time"
 
@@ -25,6 +26,18 @@ func NewRegistryProcessor(ttl time.Duration, fixedIPs []string) *RegistryProcess
 		Clients: clients,
 		TTL:     ttl,
 	}
+}
+
+// GetClients returns a list of all client IPs.
+func (r *RegistryProcessor) GetClients() []net.IP {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var ips []net.IP
+	for ipStr := range r.Clients {
+		ips = append(ips, net.ParseIP(ipStr))
+	}
+	return ips
 }
 
 func (r *RegistryProcessor) Process(pkt *proxy.Packet) (bool, error) {

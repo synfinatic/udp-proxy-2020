@@ -58,7 +58,7 @@ func TestBuildBPFFilter(t *testing.T) {
 		IP:      net.IP{192, 168, 1, 10},
 		Netmask: net.IPMask{255, 255, 255, 0},
 	}
-	
+
 	got := BuildBPFFilter([]int32{53, 67}, []pcap.InterfaceAddress{addr})
 	want := "(udp port 53 or udp port 67) and (src net 192.168.1.0/24)"
 	if got != want {

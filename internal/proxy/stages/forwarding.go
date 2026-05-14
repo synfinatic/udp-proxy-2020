@@ -7,7 +7,7 @@ import (
 
 // PacketFeed is an interface for distributing packets to other interfaces.
 type PacketFeed interface {
-	Send(pkt *proxy.Packet, linkType layers.LinkType)
+	Publish(msg proxy.BusMessage)
 }
 
 // ForwardingSink sends packets to a feed which distributes them to other pipelines.
@@ -18,7 +18,10 @@ type ForwardingSink struct {
 }
 
 func (s *ForwardingSink) Write(pkt *proxy.Packet) error {
-	s.Feed.Send(pkt, s.LinkType)
+	s.Feed.Publish(proxy.BusMessage{
+		Packet:   pkt,
+		LinkType: s.LinkType,
+	})
 	return nil
 }
 
