@@ -66,9 +66,12 @@ func (t *TransformProcessor) Process(pkt *proxy.Packet) (bool, error) {
 	// Update the proxy.Packet with the new raw data
 	pkt.Raw = buffer.Bytes()
 
-	// We don't overwrite pkt.Packet here because the Sinks currently rely on
-	// the original decoded layers for logic (like checking LinkType),
-	// but the raw data is what actually gets transmitted.
+	// Update the decoded packet as well so downstream processors see the change
+	newPacket := gopacket.NewPacket(pkt.Raw, layers.LayerTypeIPv4, gopacket.Default)
+	if newPacket.ErrorLayer() != nil {
+		return false, fmt.Errorf("failed to re-decode modified packet: %w", newPacket.ErrorLayer().Error())
+	}
+	pkt.Packet = newPacket
 
 	return true, nil
 }

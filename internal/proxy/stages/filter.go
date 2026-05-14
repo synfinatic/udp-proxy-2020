@@ -12,6 +12,7 @@ type FilterProcessor struct {
 
 func (f *FilterProcessor) Process(pkt *proxy.Packet) (bool, error) {
 	if pkt.Packet.NetworkLayer() == nil ||
+		pkt.Packet.NetworkLayer().LayerType() != layers.LayerTypeIPv4 ||
 		pkt.Packet.TransportLayer() == nil ||
 		pkt.Packet.TransportLayer().LayerType() != layers.LayerTypeUDP {
 		return false, nil

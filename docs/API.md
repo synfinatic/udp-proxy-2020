@@ -66,7 +66,7 @@ func main() {
         handle.SetBPFFilter(filter)
 
         // 3. Initialize Registry (handles learning and fixed IPs)
-        registry := stages.NewRegistryProcessor(180 * time.Minute, fixedIPs[iname])
+        registry, _ := stages.NewRegistryProcessor(180 * time.Minute, fixedIPs[iname])
 
         // 4. Create Pipeline Source
         pipeline := proxy.NewPipeline(stages.NewPcapSource(handle, iname))
