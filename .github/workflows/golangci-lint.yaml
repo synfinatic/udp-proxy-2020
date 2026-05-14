@@ -23,8 +23,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libpcap0.8 libpcap0.8-dev
       - uses: actions/setup-go@v6
         with:
-          go-version: ${{vars.GO_VERSION}}
+          go-version-file: 'go.mod'
       - uses: actions/checkout@v6
+      - name: Get golangci-lint version
+        run: echo "GOLANGCI_LINT_VERSION=$(make .print-golangci-lint-version)" >> $GITHUB_ENV
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:

@@ -150,11 +150,17 @@ func main() {
 		if cli.Pcap {
 			fPath := filepath.Join(cli.PcapPath, fmt.Sprintf("udp-proxy-in-%s.pcap", iname))
 			f, err := os.Create(fPath)
-			if err == nil {
-				w := pcapgo.NewWriter(f)
-				w.WriteFileHeader(65536, handle.LinkType())
-				pipeline.AddSink(&stages.PcapFileSink{Writer: w})
+			if err != nil {
+				slog.Error("Failed to create pcap file", "error", err)
+				os.Exit(1)
 			}
+			w := pcapgo.NewWriter(f)
+			err = w.WriteFileHeader(65536, handle.LinkType())
+			if err != nil {
+				slog.Error("Failed to write pcap file header", "error", err)
+				os.Exit(1)
+			}
+			pipeline.AddSink(&stages.PcapFileSink{Writer: w})
 		}
 
 		// Forwarding to bus

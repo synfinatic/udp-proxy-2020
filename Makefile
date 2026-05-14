@@ -28,6 +28,7 @@ LDFLAGS            += -X "main.CommitID=$(PROJECT_COMMIT)" -s -w
 OUTPUT_NAME        := $(DIST_DIR)$(PROJECT_NAME)-$(GOOS)-$(GOARCH)
 DOCKER_VERSION     ?= v$(PROJECT_VERSION)
 FREEBSD_VERSION    := 14.3
+GOLANGCI_LINT_VERSION := 2.10.1
 
 ALL: $(OUTPUT_NAME)
 
@@ -359,3 +360,7 @@ package: .linux-amd64  ## Build deb/rpm packages
 	docker run --rm \
 		-v $$(pwd)/dist:/root/dist \
 		-e VERSION=$(PROJECT_VERSION) udp-proxy-2020-builder:latest
+
+.PHONY: print-golangci-lint-version
+.print-golangci-lint-version:
+	@echo v$(GOLANGCI_LINT_VERSION)
