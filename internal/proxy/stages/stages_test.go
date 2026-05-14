@@ -46,7 +46,10 @@ func TestForwardingSink(t *testing.T) {
 }
 
 func TestRegistryProcessor_GetClients(t *testing.T) {
-	registry := NewRegistryProcessor(0, []string{"192.168.1.1", "10.0.0.1"})
+	registry, err := NewRegistryProcessor(0, []string{"192.168.1.1", "10.0.0.1"})
+	if err != nil {
+		t.Fatalf("NewRegistryProcessor failed: %v", err)
+	}
 
 	ips := registry.GetClients()
 	if len(ips) != 2 {

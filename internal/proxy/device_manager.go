@@ -117,7 +117,7 @@ func (dm *DeviceManager) GetLoopback() string {
 
 	for k, v := range dm.interfaces {
 		for _, a := range v.Addresses {
-			if a.IP.String() == "127.0.0.1" {
+			if a.IP.IsLoopback() {
 				return k
 			}
 		}

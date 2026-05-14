@@ -38,7 +38,6 @@ type CLI struct {
 	PcapPath       string   `kong:"short='d',default='/root',help='Directory to write debug pcap files'"`
 	ListInterfaces bool     `kong:"help='List available interfaces and exit'"`
 	Version        bool     `kong:"short='v',help='Print version information'"`
-	NoListen       bool     `kong:"help='Do not actively listen on UDP port(s)'"`
 }
 
 func main() {
@@ -82,7 +81,15 @@ func main() {
 	defer cancel()
 
 	timeout := config.ParseTimeout(cli.Timeout)
-	ttl, _ := time.ParseDuration(fmt.Sprintf("%dm", cli.CacheTTL))
+	if cli.CacheTTL <= 0 {
+		slog.Error("CacheTTL must be a positive number of minutes")
+		os.Exit(1)
+	}
+	ttl, err := time.ParseDuration(fmt.Sprintf("%dm", cli.CacheTTL))
+	if err != nil {
+		slog.Error("Invalid CacheTTL", "value", cli.CacheTTL, "error", err)
+		os.Exit(1)
+	}
 
 	dm, err := proxy.NewDeviceManager()
 	if err != nil {
@@ -140,7 +147,11 @@ func main() {
 			os.Exit(1)
 		}
 
-		registry := stages.NewRegistryProcessor(ttl, fixedIPs[iname])
+		registry, err := stages.NewRegistryProcessor(ttl, fixedIPs[iname])
+		if err != nil {
+			slog.Error("Invalid fixed IP in registry", "interface", iname, "error", err)
+			os.Exit(1)
+		}
 
 		pipeline := proxy.NewPipeline(stages.NewPcapSource(handle, iname))
 		pipeline.AddProcessor(&stages.FilterProcessor{Iname: iname})
@@ -155,12 +166,12 @@ func main() {
 				os.Exit(1)
 			}
 			w := pcapgo.NewWriter(f)
-			err = w.WriteFileHeader(65536, handle.LinkType())
-			if err != nil {
+			if err = w.WriteFileHeader(65536, handle.LinkType()); err != nil {
+				f.Close()
 				slog.Error("Failed to write pcap file header", "error", err)
 				os.Exit(1)
 			}
-			pipeline.AddSink(&stages.PcapFileSink{Writer: w})
+			pipeline.AddSink(&stages.PcapFileSink{Writer: w, File: f})
 		}
 
 		// Forwarding to bus
