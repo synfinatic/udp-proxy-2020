@@ -1,15 +1,20 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/alecthomas/kong"
 	log "github.com/sirupsen/logrus"
+	"github.com/synfinatic/udp-proxy-2020/internal/config"
+	"github.com/synfinatic/udp-proxy-2020/internal/proxy"
+	"github.com/synfinatic/udp-proxy-2020/internal/proxy/stages"
 )
 
 var Version = "unknown"
@@ -48,7 +53,7 @@ func main() {
 	cli := parseArgs()
 
 	// handle our timeout
-	timeout := parseTimeout(cli.Timeout)
+	timeout := config.ParseTimeout(cli.Timeout)
 
 	var fixed_ip = map[string][]string{}
 	for _, fip := range cli.FixedIp {
@@ -59,7 +64,7 @@ func main() {
 		if net.ParseIP(split[1]) == nil {
 			log.Fatalf("--fixed-ip %s IP address is not a valid IPv4 address", fip)
 		}
-		if !stringInSlice(split[0], cli.Interface) {
+		if !slices.Contains(cli.Interface, split[0]) {
 			log.Fatalf("--fixed-ip %s interface must be specified via --interface", fip)
 		}
 		fixed_ip[split[0]] = append(fixed_ip[split[0]], split[1])
@@ -70,7 +75,7 @@ func main() {
 	var listeners = []Listen{}
 	for _, iface := range cli.Interface {
 		// check for duplicates
-		if stringPrefixInSlice(iface, seenInterfaces) {
+		if slices.ContainsFunc(seenInterfaces, func(s string) bool { return strings.HasPrefix(iface, s) }) {
 			log.Fatalf("Can't specify the same interface (%s) multiple times", iface)
 		}
 		seenInterfaces = append(seenInterfaces, iface)
@@ -130,7 +135,46 @@ func main() {
 	log.Debug("Initialization complete!")
 	for i := range listeners {
 		wg.Add(1)
-		go listeners[i].handlePackets(&spf, &wg)
+		go func(l *Listen) {
+			defer wg.Done()
+
+			// New pipeline-based approach
+			p := proxy.NewPipeline(stages.NewPcapSource(l.handle, l.iname))
+
+			// Filter stage
+			p.AddProcessor(&stages.FilterProcessor{Iname: l.iname})
+
+			// Registry (Learning) stage
+			p.AddProcessor(stages.NewRegistryProcessor(l.clientTTL, fixed_ip[l.iname]))
+
+			// Pcap debug sink
+			if cli.Pcap && l.inwriter != nil {
+				p.AddSink(&stages.PcapFileSink{Writer: l.inwriter})
+			}
+
+			// Forwarding sink
+			p.AddSink(&stages.ForwardingSink{
+				Feed:     &spf,
+				Iname:    l.iname,
+				LinkType: l.handle.LinkType(),
+			})
+
+			// Add registration to spf
+			spf.RegisterSender(l.sendpkt, l.iname)
+
+			// Separate goroutine for sending outbound packets?
+			// Existing design uses l.sendpkt channel.
+			// For now, keep the loop that reads from l.sendpkt in another goroutine or here.
+			go func() {
+				for s := range l.sendpkt {
+					l.sendPackets(s)
+				}
+			}()
+
+			if err := p.Run(context.Background()); err != nil {
+				log.Errorf("%s: pipeline error: %v", l.iname, err)
+			}
+		}(&listeners[i])
 	}
 	wg.Wait()
 }

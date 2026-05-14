@@ -17,6 +17,7 @@ import (
 	"github.com/gopacket/gopacket/pcap"
 	"github.com/gopacket/gopacket/pcapgo"
 	log "github.com/sirupsen/logrus"
+	"github.com/synfinatic/udp-proxy-2020/internal/proxy"
 )
 
 const (
@@ -180,7 +181,12 @@ func (l *Listen) handlePackets(s *SendPktFeed, wg *sync.WaitGroup) {
 			}
 
 			log.Debugf("%s: received packet and fowarding onto other interfaces", l.iname)
-			s.Send(packet, l.iname, l.handle.LinkType())
+			s.Send(&proxy.Packet{
+				Packet:           packet,
+				Raw:              packet.Data(),
+				Metadata:         packet.Metadata().CaptureInfo,
+				ArrivalInterface: l.iname,
+			}, l.handle.LinkType())
 
 			// write to pcap?
 			if l.inwriter != nil {
