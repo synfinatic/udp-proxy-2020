@@ -5,6 +5,7 @@ import (
 
 	"github.com/gopacket/gopacket/pcap"
 	log "github.com/sirupsen/logrus"
+	"github.com/synfinatic/udp-proxy-2020/internal/config"
 )
 
 // Interfaces is a map between interface name and pcap data structure
@@ -48,7 +49,7 @@ func initializeInterface(l *Listen) {
 	}
 
 	// set our BPF filter
-	bpf_filter := buildBPFFilter(l.ports, Interfaces[l.iname].Addresses, l.promisc)
+	bpf_filter := config.BuildBPFFilter(l.ports, Interfaces[l.iname].Addresses)
 	log.Debugf("%s: applying BPF Filter: %s", l.iname, bpf_filter)
 	if err = l.handle.SetBPFFilter(bpf_filter); err != nil {
 		log.Fatalf("%s: %s", l.iname, err)
