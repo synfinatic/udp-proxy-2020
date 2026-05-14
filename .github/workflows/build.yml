@@ -91,7 +91,8 @@ jobs:
     runs-on: ubuntu-24.04-arm
 
     steps:
-        - uses: actions/checkout@v6
+        - name: Checkout code
+          uses: actions/checkout@v6
 
         - name: Install dependencies
           run: |
@@ -225,7 +226,8 @@ jobs:
     runs-on: macos-latest
 
     steps:
-        - uses: actions/checkout@v6
+        - name: Checkout code
+          uses: actions/checkout@v6
 
         - name: Install Go
           uses: actions/setup-go@v6
@@ -265,7 +267,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-        - uses: actions/checkout@v6
+        - name: Checkout code
+          uses: actions/checkout@v6
 
         - name: Build in FreeBSD
           # https://github.com/marketplace/actions/freebsd-vm 
