@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"strings"
 	"sync"
 
 	"github.com/gopacket/gopacket/layers"
@@ -32,7 +31,7 @@ func (b *PacketBus) Publish(msg BusMessage) {
 	defer b.lock.RUnlock()
 
 	for iname, ch := range b.senders {
-		if strings.Compare(iname, msg.Packet.ArrivalInterface) == 0 {
+		if iname == msg.Packet.ArrivalInterface {
 			continue
 		}
 		// Non-blocking send to avoid deadlocks if a buffer is full

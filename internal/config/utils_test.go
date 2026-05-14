@@ -60,8 +60,20 @@ func TestBuildBPFFilter(t *testing.T) {
 	}
 
 	got := BuildBPFFilter([]int32{53, 67}, []pcap.InterfaceAddress{addr})
-	want := "(udp port 53 or udp port 67) and (src net 192.168.1.0/24)"
+	want := "(udp port 53 or udp port 67) and src net 192.168.1.0/24"
 	if got != want {
 		t.Errorf("BuildBPFFilter() = %q, want %q", got, want)
+	}
+
+	gotMulti := BuildBPFFilter([]int32{53}, []pcap.InterfaceAddress{
+		addr,
+		{
+			IP:      net.IP{10, 0, 0, 5},
+			Netmask: net.IPMask{255, 0, 0, 0},
+		},
+	})
+	wantMulti := "udp port 53 and (src net 192.168.1.0/24 or src net 10.0.0.0/8)"
+	if gotMulti != wantMulti {
+		t.Errorf("BuildBPFFilter() multi = %q, want %q", gotMulti, wantMulti)
 	}
 }
