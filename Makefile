@@ -194,9 +194,11 @@ freebsd-armv7: $(FREEBSD_ARMV7_S_NAME) ## no-help
 			mv x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd.bak x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd ;\
 		fi
 
+#	CGO_LDFLAGS='-libverbs' 
 $(FREEBSD_AMD64_S_NAME):  # .freebsd-amd64-cross
 	GOOS=freebsd GOARCH=amd64 CGO_ENABLED=1 \
-	CGO_LDFLAGS='-libverbs' \
+	CGO_LDFLAGS="$$(pkg-config --libs libpcap)" \
+	CGO_CFLAGS="$$(pkg-config --cflags libpcap)" \
 	go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 		-o $(FREEBSD_AMD64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(FREEBSD_AMD64_S_NAME)"
