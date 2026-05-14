@@ -2,12 +2,12 @@ package stages
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
 
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	"github.com/gopacket/gopacket/pcap"
-	log "github.com/sirupsen/logrus"
 	"github.com/synfinatic/udp-proxy-2020/internal/proxy"
 )
 
@@ -42,18 +42,18 @@ func (s *TransmitterSink) transmit(msg proxy.BusMessage) {
 	if !s.Promisc {
 		// Send to broadcast address
 		if err := s.sendToIP(msg, s.BroadcastAddress, eth, loop, ip4, udp, payload); err != nil {
-			log.Warnf("Unable to send packet from %s out %s: %s", msg.Packet.ArrivalInterface, s.Iname, err)
+			slog.Warn("Unable to send packet", "from", msg.Packet.ArrivalInterface, "to_interface", s.Iname, "error", err)
 		}
 	} else if s.Registry != nil {
 		// Send to all discovered clients
 		clients := s.Registry.GetClients()
 		if len(clients) == 0 {
-			log.Debugf("%s: No clients discovered, dropping packet", s.Iname)
+			slog.Debug("No clients discovered, dropping packet", "interface", s.Iname)
 			return
 		}
 		for _, clientIP := range clients {
 			if err := s.sendToIP(msg, clientIP, eth, loop, ip4, udp, payload); err != nil {
-				log.Warnf("Unable to send packet from %s to %s out %s: %s", msg.Packet.ArrivalInterface, clientIP, s.Iname, err)
+				slog.Warn("Unable to send packet to client", "from", msg.Packet.ArrivalInterface, "client", clientIP, "to_interface", s.Iname, "error", err)
 			}
 		}
 	}
@@ -72,13 +72,13 @@ func (s *TransmitterSink) decodePacket(msg proxy.BusMessage, eth *layers.Etherne
 	case layers.LinkTypeRaw:
 		parser = gopacket.NewDecodingLayerParser(layers.LayerTypeIPv4, ip4, udp, payload)
 	default:
-		log.Errorf("Unsupported link type: %v", msg.LinkType)
+		slog.Error("Unsupported link type", "link_type", msg.LinkType)
 		return false
 	}
 
 	decoded := []gopacket.LayerType{}
 	if err := parser.DecodeLayers(msg.Packet.Packet.Data(), &decoded); err != nil {
-		log.Warnf("Unable to decode packet from %s: %v", msg.Packet.ArrivalInterface, err)
+		slog.Warn("Unable to decode packet", "from", msg.Packet.ArrivalInterface, "error", err)
 		return false
 	}
 
