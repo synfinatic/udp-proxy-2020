@@ -34,12 +34,17 @@ func (m *mockProcessor) Process(pkt *Packet) (bool, error) {
 type mockSink struct {
 	mu      sync.Mutex
 	written []*Packet
+	notify  chan struct{}
 }
 
 func (m *mockSink) Write(pkt *Packet) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.written = append(m.written, pkt)
+	m.mu.Unlock()
+	select {
+	case m.notify <- struct{}{}:
+	default:
+	}
 	return nil
 }
 
@@ -48,25 +53,19 @@ func (m *mockSink) Close() error { return nil }
 func TestPipeline_Run(t *testing.T) {
 	pkt := &Packet{Raw: []byte("test")}
 	source := &mockSource{packets: []*Packet{pkt}}
-	sink := &mockSink{}
+	sink := &mockSink{notify: make(chan struct{}, 1)}
 
 	pipeline := NewPipeline(source)
 	pipeline.AddSink(sink)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	// Ensure we close the source to break the loop even if ctx isn't cancelled
-	// but here we want to test that Run consumes the packet and then we stop.
+	defer cancel()
 
 	go func() {
-		// Give it a moment to process
-		for {
-			sink.mu.Lock()
-			count := len(sink.written)
-			sink.mu.Unlock()
-			if count > 0 {
-				cancel()
-				break
-			}
+		select {
+		case <-sink.notify:
+			cancel()
+		case <-ctx.Done():
 		}
 	}()
 

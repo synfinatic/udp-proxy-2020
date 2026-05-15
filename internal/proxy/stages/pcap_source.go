@@ -3,6 +3,7 @@ package stages
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/pcap"
@@ -11,6 +12,7 @@ import (
 
 // PcapSource reads packets from a libpcap handle.
 type PcapSource struct {
+	dm           *proxy.DeviceManager
 	handle       *pcap.Handle
 	packetSource *gopacket.PacketSource
 	packets      chan gopacket.Packet
@@ -18,14 +20,23 @@ type PcapSource struct {
 }
 
 // NewPcapSource creates a new PcapSource.
-func NewPcapSource(handle *pcap.Handle, iname string) *PcapSource {
+func NewPcapSource(dm *proxy.DeviceManager, iname string, promisc bool, timeout time.Duration) (*PcapSource, error) {
+	handle, err := dm.CreateReaderHandle(iname, promisc, timeout)
+	if err != nil {
+		return nil, err
+	}
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	return &PcapSource{
+		dm:           dm,
 		handle:       handle,
 		packetSource: packetSource,
 		packets:      packetSource.Packets(),
 		iname:        iname,
-	}
+	}, nil
+}
+
+func (s *PcapSource) Handle() *pcap.Handle {
+	return s.handle
 }
 
 // Read reads the next packet from the PCAP handle.
@@ -47,10 +58,7 @@ func (s *PcapSource) Read(ctx context.Context) (*proxy.Packet, error) {
 	}
 }
 
-// Close closes the underlying pcap handle.
+// Close closes the underlying PCAP handle
 func (s *PcapSource) Close() error {
-	if s.handle != nil {
-		s.handle.Close()
-	}
-	return nil
+	return s.dm.Close(s.iname, proxy.Reader)
 }

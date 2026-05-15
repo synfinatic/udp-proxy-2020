@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 )
@@ -37,7 +38,7 @@ func (p *Pipeline) Run(ctx context.Context) error {
 	for {
 		pkt, err := p.Source.Read(ctx)
 		if err != nil {
-			if err == io.EOF || err == context.Canceled {
+			if err == io.EOF || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return nil
 			}
 			slog.Error("Source read error", "error", err)
