@@ -88,7 +88,7 @@ golangci-lint: ## Run golangci-lint on the code
 	@which golangci-lint >/dev/null 2>&1 || { echo "Please install golangci-lint: https://golangci-lint.run/usage/install/" >&2; exit 1; }
 	@golangci-lint run
 
-test: vet unittest golangci-lint ## Run all tests
+test: $(OUTPUT_NAME) vet unittest golangci-lint ## Run all tests
 
 .PHONY: .build-test
 .build-test: unittest vet test-fmt test-tidy
