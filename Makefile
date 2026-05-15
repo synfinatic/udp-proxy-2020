@@ -204,7 +204,6 @@ freebsd-armv7: $(FREEBSD_ARMV7_S_NAME) ## no-help
 			mv x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd.bak x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd ;\
 		fi
 
-#	CGO_LDFLAGS='-libverbs' 
 $(FREEBSD_AMD64_S_NAME):  # .freebsd-amd64-cross
 	GOOS=freebsd GOARCH=amd64 CGO_ENABLED=1 \
 	CGO_LDFLAGS="$$(pkg-config --libs libpcap)" \

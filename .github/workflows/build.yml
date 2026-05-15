@@ -277,12 +277,23 @@ jobs:
             release: '${{ env.FREEBSD_VERSION }}'
             usesh: true
             prepare: |
-                pkg install -y git wget bash gmake go libpcap aarch64-gcc13 \
+                pkg install -y git wget bash gmake go aarch64-gcc13 \
                 aarch64-binutils arm-gnueabi-binutils amd64-binutils \
                 armv7-freebsd-sysroot aarch64-freebsd-sysroot llvm15 pkgconf
             run: |
+                export BASEDIR=$(pwd)
+                export LIBPCAP_VERSION=${{ env.LIBPCAP_VERSION }}
+                wget -qO - https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz | tar zxf -
+
+                cd ${BASEDIR}/libpcap-${LIBPCAP_VERSION}
+                ./configure --disable-dbus --disable-rdma --prefix=/usr/local
+                gmake
+                gmake install
+
+                cd -
                 ls -l /usr/local/bin
                 export PATH=/usr/local/bin:$PATH
+                export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
                 go version
                 # fix for "fatal: detected dubious ownership in repository"
                 git config --global --add safe.directory /home/runner/work/udp-proxy-2020/udp-proxy-2020
