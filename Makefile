@@ -85,7 +85,7 @@ vet: ## Run `go vet` on the code
 .PHONY: golangci-lint
 golangci-lint: ## Run golangci-lint on the code
 	@echo checking code with golangci-lint v$(GOLANGCI_LINT_VERSION)...
-	@which golangci-lint >/dev/null || "Please install golangci-lint: https://golangci-lint.run/usage/install/"
+	@which golangci-lint >/dev/null 2>&1 || { echo "Please install golangci-lint: https://golangci-lint.run/usage/install/" >&2; exit 1; }
 	@golangci-lint run
 
 test: vet unittest golangci-lint ## Run all tests
@@ -372,6 +372,6 @@ package: .linux-amd64  ## Build deb/rpm packages
 		-v $$(pwd)/dist:/root/dist \
 		-e VERSION=$(PROJECT_VERSION) udp-proxy-2020-builder:latest
 
-.PHONY: print-golangci-lint-version
+.PHONY: .print-golangci-lint-version
 .print-golangci-lint-version:
 	@echo v$(GOLANGCI_LINT_VERSION)
