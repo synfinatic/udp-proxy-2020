@@ -81,10 +81,10 @@ func (s *TransmitterSink) transmit(msg proxy.BusMessage) {
 			slog.Debug("No clients discovered, dropping packet", "interface", s.Iname)
 			return
 		}
-		for _, clientIP := range clients {
+		for _, client := range clients {
 			discoveredClients = true
-			if err := s.sendToIP(msg, clientIP, eth, loop, ip4, udp, payload); err != nil {
-				slog.Warn("Unable to send packet to client", "from", msg.Packet.ArrivalInterface, "client", clientIP, "to_interface", s.Iname, "error", err)
+			if err := s.sendToIP(msg, client.IP, eth, loop, ip4, udp, payload); err != nil {
+				slog.Warn("Unable to send packet to client", "from", msg.Packet.ArrivalInterface, "client", client.IP, "to_interface", s.Iname, "error", err)
 			}
 		}
 		if discoveredClients {

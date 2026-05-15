@@ -58,11 +58,11 @@ func TestRegistryProcessor_GetClients(t *testing.T) {
 
 	found1 := false
 	found2 := false
-	for _, ip := range ips {
-		if ip.String() == "192.168.1.1" {
+	for _, client := range ips {
+		if client.IP.String() == "192.168.1.1" {
 			found1 = true
 		}
-		if ip.String() == "10.0.0.1" {
+		if client.IP.String() == "10.0.0.1" {
 			found2 = true
 		}
 	}
