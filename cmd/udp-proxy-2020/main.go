@@ -54,6 +54,7 @@ func main() {
 		slog.Error("Failed to initialize device manager", "error", err)
 		os.Exit(1)
 	}
+	defer dm.CloseHandles()
 
 	if cli.ListInterfaces {
 		dm.ListInterfaces()
@@ -62,7 +63,11 @@ func main() {
 
 	bus := proxy.NewPacketBus()
 
-	pipelines, transmitters, registries := setupPipelines(cli, dm, bus, timeout, ttl, ctx)
+	pipelines, transmitters, registries, err := setupPipelines(cli, dm, bus, timeout, ttl, ctx)
+	if err != nil {
+		slog.Error("Failed to set up pipelines", "error", err)
+		return
+	}
 
 	// Start registry cleanup ticker
 	go func() {
@@ -92,7 +97,7 @@ func main() {
 	}
 
 	for _, t := range transmitters {
-		go t.Run()
+		go t.Run(ctx)
 	}
 
 	slog.Info("All pipelines started")
@@ -149,7 +154,7 @@ func getDurations(cli CLI) (time.Duration, time.Duration) {
 	return timeout, ttl
 }
 
-func setupPipelines(cli CLI, dm *proxy.DeviceManager, bus *proxy.PacketBus, timeout, ttl time.Duration, ctx context.Context) ([]*proxy.Pipeline, []*stages.TransmitterSink, []*stages.RegistryProcessor) {
+func setupPipelines(cli CLI, dm *proxy.DeviceManager, bus *proxy.PacketBus, timeout, ttl time.Duration, ctx context.Context) ([]*proxy.Pipeline, []*stages.TransmitterSink, []*stages.RegistryProcessor, error) {
 	var pipelines []*proxy.Pipeline
 	var transmitters []*stages.TransmitterSink
 	var registries []*stages.RegistryProcessor
@@ -161,7 +166,7 @@ func setupPipelines(cli CLI, dm *proxy.DeviceManager, bus *proxy.PacketBus, time
 		lb := dm.GetLoopback()
 		if lb == "" {
 			slog.Error("Unable to find loopback interface")
-			os.Exit(1)
+			return nil, nil, nil, fmt.Errorf("loopback interface not found")
 		}
 		interfaces = append(interfaces, lb)
 	}
@@ -172,34 +177,35 @@ func setupPipelines(cli CLI, dm *proxy.DeviceManager, bus *proxy.PacketBus, time
 		netif, err := net.InterfaceByName(iname)
 		if err != nil {
 			slog.Error("Interface not found", "interface", iname, "error", err)
-			os.Exit(1)
+			return nil, nil, nil, fmt.Errorf("interface not found: %s", iname)
 		}
 
-		handle, err := dm.CreateHandle(iname, (netif.Flags&net.FlagBroadcast) == 0, timeout)
+		source, err := stages.NewPcapSource(dm, iname, (netif.Flags&net.FlagBroadcast) == 0, timeout)
 		if err != nil {
 			slog.Error("Failed to open interface", "interface", iname, "error", err)
-			os.Exit(1)
+			return nil, nil, nil, fmt.Errorf("failed to open interface: %s", iname)
 		}
+		rhandle := source.Handle()
 
 		// Set BPF filter
 		addrs, err := dm.GetAddresses(iname)
 		if err != nil {
 			slog.Error("Failed to get addresses for interface", "interface", iname, "error", err)
-			os.Exit(1)
+			return nil, nil, nil, fmt.Errorf("failed to get addresses for interface: %s", iname)
 		}
 		filter := config.BuildBPFFilter(cli.Port, addrs)
-		if err := handle.SetBPFFilter(filter); err != nil {
+		if err := rhandle.SetBPFFilter(filter); err != nil {
 			slog.Error("Failed to set BPF filter", "interface", iname, "error", err)
-			os.Exit(1)
+			return nil, nil, nil, fmt.Errorf("failed to set BPF filter for interface: %s", iname)
 		}
 
 		registry, err := stages.NewRegistryProcessor(ttl, fixedIPs[iname])
 		if err != nil {
 			slog.Error("Invalid fixed IP in registry", "interface", iname, "error", err)
-			os.Exit(1)
+			return nil, nil, nil, fmt.Errorf("invalid fixed IP in registry for interface: %s", iname)
 		}
 
-		pipeline := proxy.NewPipeline(stages.NewPcapSource(handle, iname))
+		pipeline := proxy.NewPipeline(source)
 		pipeline.AddProcessor(&stages.FilterProcessor{Iname: iname})
 		pipeline.AddProcessor(registry)
 
@@ -209,13 +215,13 @@ func setupPipelines(cli CLI, dm *proxy.DeviceManager, bus *proxy.PacketBus, time
 			f, err := os.Create(fPath)
 			if err != nil {
 				slog.Error("Failed to create pcap file", "error", err)
-				os.Exit(1)
+				return nil, nil, nil, fmt.Errorf("failed to create pcap file: %s", fPath)
 			}
 			w := pcapgo.NewWriter(f)
-			if err = w.WriteFileHeader(65536, handle.LinkType()); err != nil {
+			if err = w.WriteFileHeader(65536, rhandle.LinkType()); err != nil {
 				f.Close()
 				slog.Error("Failed to write pcap file header", "error", err)
-				os.Exit(1)
+				return nil, nil, nil, fmt.Errorf("failed to write pcap file header: %s", fPath)
 			}
 			pipeline.AddSink(&stages.PcapFileSink{Writer: w, File: f})
 		}
@@ -224,7 +230,7 @@ func setupPipelines(cli CLI, dm *proxy.DeviceManager, bus *proxy.PacketBus, time
 		pipeline.AddSink(&stages.ForwardingSink{
 			Feed:     bus,
 			Iname:    iname,
-			LinkType: handle.LinkType(),
+			LinkType: rhandle.LinkType(),
 		})
 
 		// Broadcaster for this interface
@@ -249,17 +255,20 @@ func setupPipelines(cli CLI, dm *proxy.DeviceManager, bus *proxy.PacketBus, time
 
 		if bcast == nil && (netif.Flags&net.FlagBroadcast) != 0 {
 			slog.Error("Failed to discover broadcast address for interface", "interface", iname)
-			os.Exit(1)
+			return nil, nil, nil, fmt.Errorf("failed to discover broadcast address for interface: %s", iname)
 		}
 
-		transmitter := &stages.TransmitterSink{
-			Handle:           handle,
-			Iname:            iname,
-			HardwareAddr:     netif.HardwareAddr,
-			Promisc:          (netif.Flags & net.FlagBroadcast) == 0,
-			BroadcastAddress: bcast,
-			PacketBus:        busChan,
-			Registry:         registry,
+		transmitter, err := stages.NewTransmitterSink(
+			dm,
+			iname,
+			(netif.Flags&net.FlagBroadcast) != 0,
+			bcast,
+			netif.HardwareAddr,
+			busChan,
+			registry)
+		if err != nil {
+			slog.Error("Failed to create transmitter sink", "interface", iname, "error", err)
+			return nil, nil, nil, fmt.Errorf("failed to create transmitter sink for interface: %s", iname)
 		}
 
 		pipelines = append(pipelines, pipeline)
@@ -267,7 +276,7 @@ func setupPipelines(cli CLI, dm *proxy.DeviceManager, bus *proxy.PacketBus, time
 		registries = append(registries, registry)
 	}
 
-	return pipelines, transmitters, registries
+	return pipelines, transmitters, registries, nil
 }
 
 func checkDuplicateInterfaces(ifaces []string) {

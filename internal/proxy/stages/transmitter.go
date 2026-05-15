@@ -1,6 +1,7 @@
 package stages
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net"
@@ -13,18 +14,50 @@ import (
 
 // TransmitterSink sends packets to a physical interface.
 type TransmitterSink struct {
+	dm               *proxy.DeviceManager
 	Handle           *pcap.Handle
 	Iname            string
 	HardwareAddr     net.HardwareAddr
-	Promisc          bool
+	Broadcast        bool
 	BroadcastAddress net.IP
 	PacketBus        chan proxy.BusMessage
 	Registry         *RegistryProcessor // Optional, for client list
 }
 
-func (s *TransmitterSink) Run() {
-	for msg := range s.PacketBus {
-		s.transmit(msg)
+// NewTransmitterSink creates a new TransmitterSink.
+func NewTransmitterSink(dm *proxy.DeviceManager,
+	iname string,
+	broadcast bool,
+	broadcastAddress net.IP,
+	hardwareAddr net.HardwareAddr,
+	busChan chan proxy.BusMessage,
+	registry *RegistryProcessor) (*TransmitterSink, error) {
+	handle, err := dm.CreateWriterHandle(iname)
+	if err != nil {
+		return nil, err
+	}
+	return &TransmitterSink{
+		dm:               dm,
+		Handle:           handle,
+		Iname:            iname,
+		Broadcast:        broadcast,
+		BroadcastAddress: broadcastAddress,
+		HardwareAddr:     hardwareAddr,
+		PacketBus:        busChan,
+		Registry:         registry,
+	}, nil
+}
+
+// Run starts the transmitter loop which listens for packets on the PacketBus and transmits them.
+// To stop the loop, cancel the provided context.
+func (s *TransmitterSink) Run(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg := <-s.PacketBus:
+			s.transmit(msg)
+		}
 	}
 }
 
@@ -39,12 +72,9 @@ func (s *TransmitterSink) transmit(msg proxy.BusMessage) {
 		return
 	}
 
-	if !s.Promisc {
-		// Send to broadcast address
-		if err := s.sendToIP(msg, s.BroadcastAddress, eth, loop, ip4, udp, payload); err != nil {
-			slog.Warn("Unable to send packet", "from", msg.Packet.ArrivalInterface, "to_interface", s.Iname, "error", err)
-		}
-	} else if s.Registry != nil {
+	if s.Registry != nil {
+		discoveredClients := false
+
 		// Send to all discovered clients
 		clients := s.Registry.GetClients()
 		if len(clients) == 0 {
@@ -52,13 +82,25 @@ func (s *TransmitterSink) transmit(msg proxy.BusMessage) {
 			return
 		}
 		for _, clientIP := range clients {
+			discoveredClients = true
 			if err := s.sendToIP(msg, clientIP, eth, loop, ip4, udp, payload); err != nil {
 				slog.Warn("Unable to send packet to client", "from", msg.Packet.ArrivalInterface, "client", clientIP, "to_interface", s.Iname, "error", err)
 			}
 		}
-	} else {
-		slog.Warn("Promisc mode but no registry configured, dropping packet", "interface", s.Iname)
+		if discoveredClients {
+			return
+		}
 	}
+
+	// If broadcast is enabled on interface, and there are no discovered clients, send to the broadcast address
+	if s.Broadcast {
+		if err := s.sendToIP(msg, s.BroadcastAddress, eth, loop, ip4, udp, payload); err != nil {
+			slog.Warn("Unable to send packet", "from", msg.Packet.ArrivalInterface, "to_interface", s.Iname, "error", err)
+		}
+		return
+	}
+
+	slog.Warn("Unable to send packet, dropping packet", "interface", s.Iname)
 }
 
 func (s *TransmitterSink) decodePacket(msg proxy.BusMessage, eth *layers.Ethernet, loop *layers.Loopback, ip4 *layers.IPv4, udp *layers.UDP, payload *gopacket.Payload) bool {
@@ -95,7 +137,7 @@ func (s *TransmitterSink) sendToIP(msg proxy.BusMessage, dstIP net.IP, eth layer
 
 	buffer := gopacket.NewSerializeBuffer()
 
-	// Build layers from inside out
+	// Build layers from top down.
 	// Payload
 	if err := payload.SerializeTo(buffer, opts); err != nil {
 		return fmt.Errorf("serialize payload: %w", err)
@@ -150,4 +192,9 @@ func (s *TransmitterSink) sendToIP(msg proxy.BusMessage, dstIP net.IP, eth layer
 	}
 
 	return s.Handle.WritePacketData(buffer.Bytes())
+}
+
+// Close closes the underlying PCAP handle
+func (s *TransmitterSink) Close() error {
+	return s.dm.Close(s.Iname, proxy.Writer)
 }

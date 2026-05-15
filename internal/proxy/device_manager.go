@@ -13,12 +13,25 @@ import (
 type DeviceManager struct {
 	mu         sync.RWMutex
 	interfaces map[string]pcap.Interface
+	handles    map[string]*pcap.Handle
+}
+
+type PcapHandleDirection string
+
+const (
+	Reader PcapHandleDirection = "read"
+	Writer PcapHandleDirection = "write"
+)
+
+func deviceManagerKey(iname string, direction PcapHandleDirection) string {
+	return fmt.Sprintf("%s:%s", iname, direction)
 }
 
 // NewDeviceManager creates and initializes a new DeviceManager.
 func NewDeviceManager() (*DeviceManager, error) {
 	dm := &DeviceManager{
 		interfaces: make(map[string]pcap.Interface),
+		handles:    make(map[string]*pcap.Handle),
 	}
 	if err := dm.Refresh(); err != nil {
 		return nil, err
@@ -59,7 +72,15 @@ func (dm *DeviceManager) GetAddresses(iname string) ([]pcap.InterfaceAddress, er
 }
 
 // CreateHandle initializes a libpcap handle for the given interface.
-func (dm *DeviceManager) CreateHandle(iname string, promisc bool, timeout time.Duration) (*pcap.Handle, error) {
+func (dm *DeviceManager) CreateReaderHandle(iname string, promisc bool, timeout time.Duration) (*pcap.Handle, error) {
+	key := deviceManagerKey(iname, Reader)
+	dm.mu.RLock()
+	if handle, exists := dm.handles[key]; exists {
+		dm.mu.RUnlock()
+		return handle, nil
+	}
+	dm.mu.RUnlock()
+
 	inactive, err := pcap.NewInactiveHandle(iname)
 	if err != nil {
 		return nil, err
@@ -86,11 +107,14 @@ func (dm *DeviceManager) CreateHandle(iname string, promisc bool, timeout time.D
 		return nil, fmt.Errorf("interface %s has an unsupported link type: %s", iname, handle.LinkType())
 	}
 
-	// Default to inbound only
 	if err := handle.SetDirection(pcap.DirectionIn); err != nil {
 		handle.Close()
 		return nil, fmt.Errorf("failed to set direction on interface %s: %w", iname, err)
 	}
+
+	dm.mu.Lock()
+	dm.handles[key] = handle
+	dm.mu.Unlock()
 
 	return handle, nil
 }
@@ -139,4 +163,81 @@ func (dm *DeviceManager) GetLoopback() string {
 		}
 	}
 	return ""
+}
+
+// CloseHandles closes all open pcap handles.
+func (dm *DeviceManager) CloseHandles() {
+	dm.mu.Lock()
+	defer dm.mu.Unlock()
+
+	for key, handle := range dm.handles {
+		handle.Close()
+		delete(dm.handles, key)
+	}
+}
+
+func (dm *DeviceManager) GetHandle(iname string, direction PcapHandleDirection) (*pcap.Handle, error) {
+	key := deviceManagerKey(iname, direction)
+	dm.mu.RLock()
+	handle, exists := dm.handles[key]
+	dm.mu.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("handle for interface %s with direction %s not found", iname, direction)
+	}
+	return handle, nil
+}
+
+// CreateWriterHandle initializes a libpcap handle for the given interface.
+func (dm *DeviceManager) CreateWriterHandle(iname string) (*pcap.Handle, error) {
+	key := deviceManagerKey(iname, Writer)
+	dm.mu.RLock()
+	if handle, exists := dm.handles[key]; exists {
+		dm.mu.RUnlock()
+		return handle, nil
+	}
+	dm.mu.RUnlock()
+
+	inactive, err := pcap.NewInactiveHandle(iname)
+	if err != nil {
+		return nil, err
+	}
+	defer inactive.CleanUp()
+
+	if err = inactive.SetPromisc(false); err != nil {
+		return nil, err
+	}
+	if err = inactive.SetSnapLen(9000); err != nil {
+		return nil, err
+	}
+
+	handle, err := inactive.Activate()
+	if err != nil {
+		return nil, err
+	}
+
+	if !dm.isValidLinkType(handle.LinkType()) {
+		handle.Close()
+		return nil, fmt.Errorf("interface %s has an unsupported link type: %s", iname, handle.LinkType())
+	}
+
+	dm.mu.Lock()
+	dm.handles[key] = handle
+	dm.mu.Unlock()
+
+	return handle, nil
+}
+
+func (dm *DeviceManager) Close(iname string, direction PcapHandleDirection) error {
+	key := deviceManagerKey(iname, direction)
+	dm.mu.Lock()
+	defer dm.mu.Unlock()
+
+	handle, exists := dm.handles[key]
+	if !exists {
+		return fmt.Errorf("handle for interface %s with direction %s not found", iname, direction)
+	}
+	handle.Close()
+	delete(dm.handles, key)
+	return nil
 }
