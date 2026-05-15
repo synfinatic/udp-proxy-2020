@@ -133,3 +133,114 @@ func TestRegistryProcessor_Len(t *testing.T) {
 		t.Errorf("Expected Len 2, got %d", reg.Len())
 	}
 }
+
+func TestRegistryProcessor_ProcessNilReceiver(t *testing.T) {
+	var reg *RegistryProcessor
+	keep, err := reg.Process(nil)
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if !keep {
+		t.Fatal("expected keep=true for nil receiver")
+	}
+}
+
+func TestRegistryProcessor_ProcessNilPacketNoMutation(t *testing.T) {
+	reg, err := NewRegistryProcessor(time.Hour, nil)
+	if err != nil {
+		t.Fatalf("NewRegistryProcessor failed: %v", err)
+	}
+
+	keep, err := reg.Process(nil)
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if !keep {
+		t.Fatal("expected keep=true for nil packet")
+	}
+	if reg.Len() != 0 {
+		t.Fatalf("expected registry to stay empty, got len=%d", reg.Len())
+	}
+}
+
+func TestRegistryProcessor_ProcessMissingIPv4NoMutation(t *testing.T) {
+	reg, err := NewRegistryProcessor(time.Hour, nil)
+	if err != nil {
+		t.Fatalf("NewRegistryProcessor failed: %v", err)
+	}
+
+	pkt := &proxy.Packet{Packet: &mockGopacket{}}
+	keep, err := reg.Process(pkt)
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if !keep {
+		t.Fatal("expected keep=true when IPv4 layer is missing")
+	}
+	if reg.Len() != 0 {
+		t.Fatalf("expected registry to stay empty, got len=%d", reg.Len())
+	}
+}
+
+func TestRegistryProcessor_ProcessRefreshesDynamicClient(t *testing.T) {
+	reg, err := NewRegistryProcessor(time.Hour, nil)
+	if err != nil {
+		t.Fatalf("NewRegistryProcessor failed: %v", err)
+	}
+
+	ip := net.ParseIP("192.168.50.10")
+	oldMAC, _ := net.ParseMAC("00:11:22:33:44:55")
+	newMAC, _ := net.ParseMAC("00:11:22:33:44:66")
+
+	_, _ = reg.Process(&proxy.Packet{Packet: &mockGopacket{
+		ip:  &layers.IPv4{SrcIP: ip},
+		eth: &layers.Ethernet{SrcMAC: oldMAC},
+	}})
+
+	first := reg.clients[ip.String()]
+	if first.LastSeen.IsZero() {
+		t.Fatal("expected LastSeen to be set for dynamic client")
+	}
+
+	time.Sleep(5 * time.Millisecond)
+
+	_, _ = reg.Process(&proxy.Packet{Packet: &mockGopacket{
+		ip:  &layers.IPv4{SrcIP: ip},
+		eth: &layers.Ethernet{SrcMAC: newMAC},
+	}})
+
+	updated := reg.clients[ip.String()]
+	if !updated.LastSeen.After(first.LastSeen) {
+		t.Fatalf("expected LastSeen to be refreshed: first=%v updated=%v", first.LastSeen, updated.LastSeen)
+	}
+	if updated.MAC.String() != newMAC.String() {
+		t.Fatalf("expected MAC to be updated to %s, got %s", newMAC, updated.MAC)
+	}
+}
+
+func TestRegistryProcessor_CleanupExpiresOnlyDynamic(t *testing.T) {
+	reg, err := NewRegistryProcessor(50*time.Millisecond, []string{"10.1.1.1"})
+	if err != nil {
+		t.Fatalf("NewRegistryProcessor failed: %v", err)
+	}
+
+	expiredIP := "192.168.1.10"
+	freshIP := "192.168.1.11"
+
+	reg.mu.Lock()
+	reg.clients[expiredIP] = ClientInfo{IP: net.ParseIP(expiredIP), LastSeen: time.Now().Add(-2 * time.Second)}
+	reg.clients[freshIP] = ClientInfo{IP: net.ParseIP(freshIP), LastSeen: time.Now()}
+	reg.mu.Unlock()
+
+	reg.Cleanup()
+
+	if reg.Has(expiredIP) {
+		t.Fatalf("expected expired dynamic client %s to be removed", expiredIP)
+	}
+	if !reg.Has(freshIP) {
+		t.Fatalf("expected fresh dynamic client %s to remain", freshIP)
+	}
+	if !reg.Has("10.1.1.1") {
+		t.Fatal("expected fixed IP to remain after cleanup")
+	}
+}
