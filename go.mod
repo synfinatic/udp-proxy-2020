@@ -1,6 +1,7 @@
 module github.com/synfinatic/udp-proxy-2020
 
-go 1.26.3
+go 1.26
+toolchain go1.26.3
 
 require (
 	github.com/alecthomas/kong v1.15.0
