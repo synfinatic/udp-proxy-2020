@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/gopacket/gopacket"
+	"github.com/gopacket/gopacket/layers"
 )
 
 // Packet represents a packet flowing through the pipeline.
@@ -22,6 +23,12 @@ type Packet struct {
 type Source interface {
 	Read(ctx context.Context) (*Packet, error)
 	Close() error
+}
+
+// PacketWriter is an interface for writing packet data to a network device.
+type PacketWriter interface {
+	WritePacketData(data []byte) error
+	LinkType() layers.LinkType
 }
 
 // Processor is an interface for filtering or transforming packets.

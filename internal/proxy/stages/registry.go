@@ -112,8 +112,6 @@ func (r *RegistryProcessor) Process(pkt *proxy.Packet) (bool, error) {
 		return true, nil
 	}
 
-	fmt.Printf("DEBUG: r=%p, r.clients=%p, ipStr=%s\n", r, r.clients, ipStr)
-
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	// only update if not a fixed client (zero time = immortal)

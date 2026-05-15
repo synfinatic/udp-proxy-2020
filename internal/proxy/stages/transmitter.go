@@ -8,14 +8,13 @@ import (
 
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
-	"github.com/gopacket/gopacket/pcap"
 	"github.com/synfinatic/udp-proxy-2020/internal/proxy"
 )
 
 // TransmitterSink sends packets to a physical interface.
 type TransmitterSink struct {
 	dm               *proxy.DeviceManager
-	Handle           *pcap.Handle
+	Writer           proxy.PacketWriter
 	Iname            string
 	HardwareAddr     net.HardwareAddr
 	Broadcast        bool
@@ -38,7 +37,7 @@ func NewTransmitterSink(dm *proxy.DeviceManager,
 	}
 	return &TransmitterSink{
 		dm:               dm,
-		Handle:           handle,
+		Writer:           handle,
 		Iname:            iname,
 		Broadcast:        broadcast,
 		BroadcastAddress: broadcastAddress,
@@ -151,10 +150,11 @@ func (s *TransmitterSink) sendToIP(msg proxy.BusMessage, dstIP net.IP, eth layer
 	// UDP checksum needs IP header for pseudo-checksum
 	newIP4 := layers.IPv4{
 		Version:  4,
+		IHL:      5,
 		TTL:      ip4.TTL,
 		Protocol: layers.IPProtocolUDP,
-		SrcIP:    ip4.SrcIP,
-		DstIP:    dstIP,
+		SrcIP:    ip4.SrcIP.To4(),
+		DstIP:    dstIP.To4(),
 	}
 	if err := newUDP.SetNetworkLayerForChecksum(&newIP4); err != nil {
 		return fmt.Errorf("set network layer for checksum: %w", err)
@@ -169,7 +169,7 @@ func (s *TransmitterSink) sendToIP(msg proxy.BusMessage, dstIP net.IP, eth layer
 	}
 
 	// L2
-	lt := s.Handle.LinkType()
+	lt := s.Writer.LinkType()
 	switch lt {
 	case layers.LinkTypeNull, layers.LinkTypeLoop:
 		l := layers.Loopback{Family: layers.ProtocolFamilyIPv4}
@@ -191,7 +191,7 @@ func (s *TransmitterSink) sendToIP(msg proxy.BusMessage, dstIP net.IP, eth layer
 		return fmt.Errorf("unsupported target link type: %v", lt)
 	}
 
-	return s.Handle.WritePacketData(buffer.Bytes())
+	return s.Writer.WritePacketData(buffer.Bytes())
 }
 
 // Close closes the underlying PCAP handle
