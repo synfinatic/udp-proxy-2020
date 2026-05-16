@@ -1,13 +1,23 @@
 Vagrant.configure("2") do |config|
-  config.vm.box = "freebsd/FreeBSD-12.3-STABLE"  # pfSense 2.6
+  config.vm.box = "freebsd/FreeBSD-14.1-STABLE"  # OpnSense
   config.vm.guest = :freebsd
-  config.vm.box_version = "2022.09.23"
+#  config.vm.box_version = "2022.09.23"
   config.ssh.shell = "sh"
   config.vm.provision "shell", inline: <<-SHELL
     pkg install -y git gmake go libpcap virtualbox-ose-kmod \
-      virtualbox-ose-additions-nox11 aarch64-gcc9 \
+      virtualbox-ose-additions-nox11 aarch64-gcc12 \
       aarch64-binutils arm-gnueabi-binutils amd64-binutils \
-      armv7-freebsd-sysroot aarch64-freebsd-sysroot
+      armv7-freebsd-sysroot aarch64-freebsd-sysroot pkgconf wget
+
+    export BASEDIR=$(pwd)
+    export LIBPCAP_VERSION=1.10.3
+    wget -qO - https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz | tar zxf -
+
+    cd ${BASEDIR}/libpcap-${LIBPCAP_VERSION}
+    ./configure --disable-dbus --disable-rdma --prefix=/usr/local
+    gmake
+    gmake install
+    cd -
   SHELL
   # have to rsync our code over to build
   config.vm.synced_folder ".", "/home/vagrant/udp-proxy-2020", create: true, disabled: false, id: 'source-code', type: "rsync"
