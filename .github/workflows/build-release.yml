@@ -282,16 +282,23 @@ jobs:
             release: '${{ env.FREEBSD_VERSION }}'
             usesh: true
             prepare: |
-                pkg install -y git wget bash gmake go libpcap aarch64-gcc13 \
-                aarch64-binutils arm-gnueabi-binutils amd64-binutils \
-                armv7-freebsd-sysroot aarch64-freebsd-sysroot
+                pkg install -y wget bash git gmake go libpcap pkgconf \
+                  aarch64-binutils arm-gnueabi-binutils amd64-binutils \
+                  aarch64-freebsd-sysroot amd64-freebsd-sysroot armv7-freebsd-sysroot 
             run: |
                 ls -la /usr/local/bin
                 export PATH=/usr/local/bin:$PATH
                 go version
                 # fix for "fatal: detected dubious ownership in repository"
                 git config --global --add safe.directory /home/runner/work/udp-proxy-2020/udp-proxy-2020
-                FREEBSD_VERSION=${{ env.FREEBSD_VERSION }} gmake freebsd-binaries
+                FREEBSD_VERSION=${{ env.FREEBSD_VERSION }} gmake FREEBSD_ARCHES="amd64 arm64 arm7" freebsd-binaries
+
+        - name: Verify FreeBSD artifacts
+          run: |
+            ls -l dist/udp-proxy-2020*-freebsd-* || true
+            ls dist/udp-proxy-2020*-freebsd-amd64 >/dev/null 2>&1 || { echo "Missing FreeBSD amd64 artifact"; exit 1; }
+            ls dist/udp-proxy-2020*-freebsd-arm64 >/dev/null 2>&1 || { echo "Missing FreeBSD arm64 artifact"; exit 1; }
+            ls dist/udp-proxy-2020*-freebsd-arm7 >/dev/null 2>&1 || { echo "Missing FreeBSD armv7 artifact"; exit 1; }
 
         - name: Upload files as artifact
           uses: actions/upload-artifact@v7
