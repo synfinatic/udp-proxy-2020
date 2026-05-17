@@ -27,7 +27,8 @@ LDFLAGS            += -X "main.Buildinfos=$(BUILDINFOS)" -X "main.Tag=$(PROJECT_
 LDFLAGS            += -X "main.CommitID=$(PROJECT_COMMIT)" -s -w
 OUTPUT_NAME        := $(DIST_DIR)$(PROJECT_NAME)-$(GOOS)-$(GOARCH)
 DOCKER_VERSION     ?= v$(PROJECT_VERSION)
-FREEBSD_VERSION    := 14.3
+FREEBSD_VERSION    := 14.2
+FREEBSD_ARCHES     ?= amd64 arm64 arm7
 GOLANGCI_LINT_VERSION := 2.10.1
 
 ALL: $(OUTPUT_NAME)
@@ -155,10 +156,13 @@ $(LINUX_AMD64_S_NAME): .prepare
 ######################################################################
 .PHONY: .vagrant-check
 .vagrant-check:
-	@which vagrant >/dev/null || "Please install Vagrant: https://www.vagrantup.com"
-	@which VBoxManage >/dev/null || "Please install VirtualBox: https://www.virtualbox.org"
+	@which vagrant >/dev/null || { echo "Please install Vagrant: https://www.vagrantup.com"; exit 1; }
+	@provider=$${VAGRANT_DEFAULT_PROVIDER:-virtualbox}; \
+		if test "$$provider" = "virtualbox" ; then \
+			which VBoxManage >/dev/null || { echo "Please install VirtualBox or set VAGRANT_DEFAULT_PROVIDER: https://www.virtualbox.org"; exit 1; }; \
+		fi
 
-freebsd: .vagrant-check ## Build all FreeBSD/pfSense binaries using Vagrant VM
+freebsd: .vagrant-check ## Build all FreeBSD binaries using Vagrant VM (set VAGRANT_DEFAULT_PROVIDER on Apple Silicon)
 	vagrant provision && vagrant up && vagrant ssh-config >.vagrant-ssh && \
 		scp -F .vagrant-ssh default:$(PROJECT_NAME)/dist/*freebsd* dist/
 
@@ -174,61 +178,63 @@ ifeq ($(GOOS),freebsd)
 FREEBSD_AMD64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-amd64
 FREEBSD_ARM64_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-arm64
 FREEBSD_ARMV7_S_NAME := $(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-armv7
+FREEBSD_ARCHES_NORMALIZED := $(sort $(subst aarch64,arm64,$(FREEBSD_ARCHES)))
+FREEBSD_ARCH_TARGETS := $(addprefix freebsd-,$(FREEBSD_ARCHES_NORMALIZED))
 
-freebsd-binaries: freebsd-amd64 # freebsd-arm64 freebsd-armv7 ## no-help
+freebsd-binaries: $(FREEBSD_ARCH_TARGETS) ## no-help
+	@for arch in $(FREEBSD_ARCHES_NORMALIZED); do \
+		artifact="$(DIST_DIR)$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-$${arch}"; \
+		test -f "$$artifact" || { echo "Missing expected FreeBSD artifact: $$artifact"; exit 1; }; \
+	done
+	@echo "Created FreeBSD artifacts for: $(FREEBSD_ARCHES_NORMALIZED)"
+
 freebsd-amd64: $(FREEBSD_AMD64_S_NAME) ## no-help
 freebsd-arm64: $(FREEBSD_ARM64_S_NAME) ## no-help
+freebsd-aarch64: freebsd-arm64 ## no-help
 freebsd-armv7: $(FREEBSD_ARMV7_S_NAME) ## no-help
 
-# Seems to be a bug with CGO & Clang where it always wants to use the host arch
-# linker and it doesn't seem to honor the LD ENV var :(
-.PHONY: .freebsd-arm-cross .freebsd-amd64-cross .freebsd-aarch64-cross
-.freebsd-aarch64-cross:
-	@cd /usr/local/bin && \
-		if test ! -f x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd.bak ; then \
-			mv x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd.bak ; \
-			ln -s aarch64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd ; \
-		fi
+# configure our build flags for cross or native compiling for FreeBSD based on our current GOARCH
+ifeq ($(GOARCH),amd64)
+AMD64_CGO_LDFLAGS := "$$(pkg-config --libs libpcap)"
+AMD64_CGO_CFLAGS := "$$(pkg-config --cflags libpcap)"
+AMD64_CC := ""
+ARM64_CGO_LDFLAGS := "$$(pkg-config --libs libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/arm64)"
+ARM64_CGO_CFLAGS := "$$(pkg-config --cflags libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/arm64)"
+ARM64_CC := /usr/local/freebsd-sysroot/arm64/bin/cc
+else ifeq ($(GOARCH),arm64)
+ARM64_CGO_LDFLAGS := "$$(pkg-config --libs libpcap)"
+ARM64_CGO_CFLAGS := "$$(pkg-config --cflags libpcap)"
+ARM64_CC := ""
+AMD64_CGO_LDFLAGS := "$$(pkg-config --libs libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/amd64)"
+AMD64_CGO_CFLAGS := "$$(pkg-config --cflags libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/amd64)"
+AMD64_CC := /usr/local/freebsd-sysroot/amd64/bin/cc
+endif
 
-.freebsd-arm-cross:
-	@cd /usr/local/bin && \
-		if test ! -f x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd.bak ; then \
-			mv x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd.bak ; \
-			ln -s arm-gnueabi-freebsd$(FREEBSD_VERSION)-ld.bfd x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd ; \
-		fi
-
-.freebsd-amd64-cross:
-	@cd /usr/local/bin && \
-		if test -f x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd.bak ; then \
-			rm x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd ; \
-			mv x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd.bak x86_64-unknown-freebsd$(FREEBSD_VERSION)-ld.bfd ;\
-		fi
-
-$(FREEBSD_AMD64_S_NAME):  # .freebsd-amd64-cross
+$(FREEBSD_AMD64_S_NAME):
 	GOOS=freebsd GOARCH=amd64 CGO_ENABLED=1 \
-	CGO_LDFLAGS="$$(pkg-config --libs libpcap)" \
-	CGO_CFLAGS="$$(pkg-config --cflags libpcap)" \
-	go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
+	CGO_LDFLAGS=$(AMD64_CGO_LDFLAGS) \
+	CGO_CFLAGS=$(AMD64_CGO_CFLAGS) \
+	CC=$(AMD64_CC) \
+	go build -ldflags '$(LDFLAGS) -linkmode external' \
 		-o $(FREEBSD_AMD64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(FREEBSD_AMD64_S_NAME)"
 
-$(FREEBSD_ARM64_S_NAME):  # .freebsd-aarch64-cross
+$(FREEBSD_ARM64_S_NAME):
 	GOOS=freebsd GOARCH=arm64 CGO_ENABLED=1 \
-	CGO_LDFLAGS='--sysroot=/usr/local/freebsd-sysroot/aarch64 -libverbs' \
-	CGO_CFLAGS='-I/usr/local/freebsd-sysroot/aarch64/usr/include' \
-	CC=/usr/local/freebsd-sysroot/aarch64/bin/cc \
-	PKG_CONFIG_PATH=/usr/local/freebsd-sysroot/aarch64/usr/libdata/pkgconfig \
-	go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
+	CGO_LDFLAGS=$(ARM64_CGO_LDFLAGS) \
+	CGO_CFLAGS=$(ARM64_CGO_CFLAGS) \
+	CC=$(ARM64_CC) \
+	go build -ldflags '$(LDFLAGS) -linkmode external' \
 		-o $(FREEBSD_ARM64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(FREEBSD_ARM64_S_NAME)"
 
+
 $(FREEBSD_ARMV7_S_NAME):  # .freebsd-arm-cross
 	GOOS=freebsd GOARCH=arm GOARM=7 CGO_ENABLED=1 \
-	CGO_LDFLAGS='--sysroot=/usr/local/freebsd-sysroot/armv7 -libverbs' \
-	CGO_CFLAGS='-I/usr/local/freebsd-sysroot/armv7/usr/include' \
+	CGO_LDFLAGS="$$(pkg-config --libs libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/arm7)" \
+	CGO_CFLAGS="$$(pkg-config --cflags libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/arm7)" \
 	CC=/usr/local/freebsd-sysroot/armv7/bin/cc \
-	PKG_CONFIG_PATH=/usr/local/freebsd-sysroot/armv7/usr/libdata/pkgconfig \
-	go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
+	go build -ldflags '$(LDFLAGS) -linkmode external' \
 		-o $(FREEBSD_ARMV7_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(FREEBSD_ARMV7_S_NAME)"
 endif
