@@ -1,7 +1,9 @@
 package stages
 
 import (
+	"bytes"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -75,7 +77,9 @@ func TestTransmitterSink_Transmit(t *testing.T) {
 	payload := []byte("test payload")
 	msg := buildEthernetBusMessage(t, net.IP{1, 1, 1, 1}, net.IP{2, 2, 2, 2}, payload)
 
-	s.transmit(msg)
+	if err := s.transmit(msg); err != nil {
+		t.Fatalf("transmit failed: %v", err)
+	}
 
 	if writer.data == nil {
 		t.Fatal("Expected data to be written to writer, but got nil")
@@ -108,8 +112,11 @@ func TestTransmitterSink_TransmitWithRegistry(t *testing.T) {
 
 	payload := []byte("test payload")
 	msg := buildEthernetBusMessage(t, net.IP{1, 1, 1, 1}, net.IP{2, 2, 2, 2}, payload)
+	msg.Packet.ArrivalInterface = ""
 
-	s.transmit(msg)
+	if err := s.transmit(msg); err != nil {
+		t.Fatalf("transmit failed: %v", err)
+	}
 
 	if writer.data == nil {
 		t.Fatal("Expected data to be written to writer")
@@ -119,5 +126,67 @@ func TestTransmitterSink_TransmitWithRegistry(t *testing.T) {
 	ipLayer := packet.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
 	if ipLayer.DstIP.String() != "192.168.1.100" {
 		t.Errorf("Expected destination IP 192.168.1.100, got %s", ipLayer.DstIP)
+	}
+}
+
+func TestTransmitterSink_TransmitWithRegistryBySourceInterface(t *testing.T) {
+	reg, err := NewRegistryProcessorByInterface(time.Hour, map[string][]string{
+		"eth-source": {"192.168.1.100"},
+		"eth-other":  {"192.168.1.200"},
+	})
+	if err != nil {
+		t.Fatalf("NewRegistryProcessorByInterface failed: %v", err)
+	}
+
+	writer := &mockWriter{linkType: layers.LinkTypeEthernet}
+	s := &TransmitterSink{
+		Writer:       writer,
+		Iname:        "eth-out",
+		Registry:     reg,
+		HardwareAddr: net.HardwareAddr{0x00, 0x11, 0x22, 0x33, 0x44, 0x55},
+	}
+
+	msg := buildEthernetBusMessage(t, net.IP{1, 1, 1, 1}, net.IP{2, 2, 2, 2}, []byte("test payload"))
+	msg.Packet.ArrivalInterface = "eth-source"
+
+	if err := s.transmit(msg); err != nil {
+		t.Fatalf("transmit failed: %v", err)
+	}
+
+	if writer.data == nil {
+		t.Fatal("Expected data to be written to writer")
+	}
+
+	packet := gopacket.NewPacket(writer.data, layers.LayerTypeEthernet, gopacket.Default)
+	ipLayer := packet.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
+	if ipLayer.DstIP.String() != "192.168.1.100" {
+		t.Errorf("Expected destination IP 192.168.1.100 from source-interface filter, got %s", ipLayer.DstIP)
+	}
+}
+
+func TestTransmitterSink_TransmitPrintsDecodedPacketWhenEnabled(t *testing.T) {
+	writer := &mockWriter{linkType: layers.LinkTypeEthernet}
+	var out bytes.Buffer
+	s := &TransmitterSink{
+		Writer:           writer,
+		Iname:            "eth0",
+		HardwareAddr:     net.HardwareAddr{0x00, 0x11, 0x22, 0x33, 0x44, 0x55},
+		Broadcast:        true,
+		BroadcastAddress: net.IP{2, 2, 2, 255}.To4(),
+		Decoder:          NewDecodeProcessor("eth0", DirectionOutbound, &out),
+	}
+
+	msg := buildEthernetBusMessage(t, net.IP{1, 1, 1, 1}, net.IP{2, 2, 2, 2}, []byte("test payload"))
+
+	if err := s.transmit(msg); err != nil {
+		t.Fatalf("transmit failed: %v", err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "eth0:out") {
+		t.Fatalf("expected decode output to contain transmitter direction, got %q", got)
+	}
+	if !strings.Contains(got, "1.1.1.1.1234 > 2.2.2.255.5678: UDP") {
+		t.Fatalf("expected decode output to contain serialized outbound destination, got %q", got)
 	}
 }

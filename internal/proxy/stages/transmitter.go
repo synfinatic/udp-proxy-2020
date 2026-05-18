@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"os"
+	"time"
 
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
@@ -21,6 +23,7 @@ type TransmitterSink struct {
 	BroadcastAddress net.IP
 	PacketBus        chan proxy.BusMessage
 	Registry         *RegistryProcessor // Optional, for client list
+	Decoder          *DecodeProcessor   // Optional, for outbound packet dumps
 }
 
 // NewTransmitterSink creates a new TransmitterSink.
@@ -30,11 +33,20 @@ func NewTransmitterSink(dm *proxy.DeviceManager,
 	broadcastAddress net.IP,
 	hardwareAddr net.HardwareAddr,
 	busChan chan proxy.BusMessage,
-	registry *RegistryProcessor) (*TransmitterSink, error) {
+	registry *RegistryProcessor,
+	decode bool) (*TransmitterSink, error) {
 	handle, err := dm.CreateWriterHandle(iname)
 	if err != nil {
 		return nil, err
 	}
+	if registry == nil {
+		slog.Warn("No registry provided to TransmitterSink, unable to send to discovered clients, will only send to broadcast address if enabled", "interface", iname)
+	}
+	var decoder *DecodeProcessor
+	if decode {
+		decoder = NewDecodeProcessor(iname, DirectionOutbound, os.Stdout)
+	}
+
 	return &TransmitterSink{
 		dm:               dm,
 		Writer:           handle,
@@ -44,7 +56,12 @@ func NewTransmitterSink(dm *proxy.DeviceManager,
 		HardwareAddr:     hardwareAddr,
 		PacketBus:        busChan,
 		Registry:         registry,
+		Decoder:          decoder,
 	}, nil
+}
+
+func (s *TransmitterSink) Name() string {
+	return fmt.Sprintf("TransmitterSink(%s)", s.Iname)
 }
 
 // Run starts the transmitter loop which listens for packets on the PacketBus and transmits them.
@@ -55,12 +72,34 @@ func (s *TransmitterSink) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case msg := <-s.PacketBus:
-			s.transmit(msg)
+			_ = s.transmit(msg)
 		}
 	}
 }
 
-func (s *TransmitterSink) transmit(msg proxy.BusMessage) {
+func (s *TransmitterSink) Write(pkt *proxy.Packet) error {
+	if pkt == nil {
+		return nil
+	}
+
+	linkType := layers.LinkTypeRaw
+	if pkt.Packet != nil {
+		switch {
+		case pkt.Packet.Layer(layers.LayerTypeEthernet) != nil:
+			linkType = layers.LinkTypeEthernet
+		case pkt.Packet.Layer(layers.LayerTypeLoopback) != nil:
+			linkType = layers.LinkTypeLoop
+		}
+	}
+
+	return s.transmit(proxy.BusMessage{Packet: pkt, LinkType: linkType})
+}
+
+func (s *TransmitterSink) transmit(msg proxy.BusMessage) error {
+	if msg.Packet == nil {
+		return nil
+	}
+
 	var eth layers.Ethernet
 	var loop layers.Loopback
 	var ip4 layers.IPv4
@@ -68,18 +107,14 @@ func (s *TransmitterSink) transmit(msg proxy.BusMessage) {
 	var payload gopacket.Payload
 
 	if !s.decodePacket(msg, &eth, &loop, &ip4, &udp, &payload) {
-		return
+		return nil
 	}
 
 	if s.Registry != nil {
 		discoveredClients := false
 
-		// Send to all discovered clients
-		clients := s.Registry.GetClients()
-		if len(clients) == 0 {
-			slog.Debug("No clients discovered, dropping packet", "interface", s.Iname)
-			return
-		}
+		// Send to clients discovered from the same source interface.
+		clients := s.Registry.GetClientsForInterface(msg.Packet.ArrivalInterface)
 		for _, client := range clients {
 			discoveredClients = true
 			if err := s.sendToIP(msg, client.IP, eth, loop, ip4, udp, payload); err != nil {
@@ -87,19 +122,21 @@ func (s *TransmitterSink) transmit(msg proxy.BusMessage) {
 			}
 		}
 		if discoveredClients {
-			return
+			return nil
 		}
 	}
 
 	// If broadcast is enabled on interface, and there are no discovered clients, send to the broadcast address
 	if s.Broadcast {
+		slog.Debug("No clients discovered, sending to broadcast address", "interface", s.Iname, "broadcast_address", s.BroadcastAddress)
 		if err := s.sendToIP(msg, s.BroadcastAddress, eth, loop, ip4, udp, payload); err != nil {
 			slog.Warn("Unable to send packet", "from", msg.Packet.ArrivalInterface, "to_interface", s.Iname, "error", err)
 		}
-		return
+		return nil
 	}
 
 	slog.Warn("Unable to send packet, dropping packet", "interface", s.Iname)
+	return nil
 }
 
 func (s *TransmitterSink) decodePacket(msg proxy.BusMessage, eth *layers.Ethernet, loop *layers.Loopback, ip4 *layers.IPv4, udp *layers.UDP, payload *gopacket.Payload) bool {
@@ -191,7 +228,27 @@ func (s *TransmitterSink) sendToIP(msg proxy.BusMessage, dstIP net.IP, eth layer
 		return fmt.Errorf("unsupported target link type: %v", lt)
 	}
 
-	return s.Writer.WritePacketData(buffer.Bytes())
+	if err := s.Writer.WritePacketData(buffer.Bytes()); err != nil {
+		return err
+	}
+
+	if s.Decoder != nil {
+		pkt := &proxy.Packet{
+			Metadata: gopacket.CaptureInfo{
+				Timestamp:     time.Now(),
+				CaptureLength: len(buffer.Bytes()),
+				Length:        len(buffer.Bytes()),
+			},
+			Raw:              buffer.Bytes(),
+			Packet:           packetFromLinkType(buffer.Bytes(), lt),
+			ArrivalInterface: s.Iname,
+		}
+		if err := s.Decoder.writePacket(pkt); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Close closes the underlying PCAP handle

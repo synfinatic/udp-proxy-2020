@@ -23,6 +23,7 @@ type Packet struct {
 type Source interface {
 	Read(ctx context.Context) (*Packet, error)
 	Close() error
+	Name() string
 }
 
 // PacketWriter is an interface for writing packet data to a network device.
@@ -36,10 +37,12 @@ type Processor interface {
 	// Process handles a packet. If it returns false, the packet is dropped
 	// and no further processors or sinks are called.
 	Process(pkt *Packet) (bool, error)
+	Name() string
 }
 
 // Sink is an interface for writing packets to a network device, file, or log.
 type Sink interface {
+	Name() string
 	Write(pkt *Packet) error
 	Close() error
 }

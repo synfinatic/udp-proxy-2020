@@ -28,3 +28,7 @@ func (s *ForwardingSink) Write(pkt *proxy.Packet) error {
 func (s *ForwardingSink) Close() error {
 	return nil
 }
+
+func (s *ForwardingSink) Name() string {
+	return "ForwardingSink(" + s.Iname + ")"
+}

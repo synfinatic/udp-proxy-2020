@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"log/slog"
 	"sync"
 
 	"github.com/gopacket/gopacket/layers"
@@ -32,11 +33,13 @@ func (b *PacketBus) Publish(msg BusMessage) {
 
 	for iname, ch := range b.senders {
 		if iname == msg.Packet.ArrivalInterface {
+			slog.Debug("Not sending packet back to source interface", slog.String("interface", iname))
 			continue
 		}
 		// Non-blocking send to avoid deadlocks if a buffer is full
 		select {
 		case ch <- msg:
+			slog.Debug("Publishing packet", slog.String("interface", iname))
 		default:
 			// In a real high-performance app, we should count drops here
 		}
@@ -47,6 +50,7 @@ func (b *PacketBus) Publish(msg BusMessage) {
 func (b *PacketBus) Subscribe(iname string, ch chan BusMessage) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
+	slog.Debug("Subscribing interface to packet bus", slog.String("interface", iname))
 	b.senders[iname] = ch
 }
 
@@ -54,5 +58,6 @@ func (b *PacketBus) Subscribe(iname string, ch chan BusMessage) {
 func (b *PacketBus) Unsubscribe(iname string) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
+	slog.Debug("Unsubscribing interface from packet bus", slog.String("interface", iname))
 	delete(b.senders, iname)
 }

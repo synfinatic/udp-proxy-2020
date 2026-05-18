@@ -23,6 +23,8 @@ func (m *mockSource) Read(ctx context.Context) (*Packet, error) {
 
 func (m *mockSource) Close() error { return nil }
 
+func (m *mockSource) Name() string { return "mockSource" }
+
 type mockProcessor struct {
 	keep bool
 }
@@ -30,6 +32,8 @@ type mockProcessor struct {
 func (m *mockProcessor) Process(pkt *Packet) (bool, error) {
 	return m.keep, nil
 }
+
+func (m *mockProcessor) Name() string { return "mockProcessor" }
 
 type mockSink struct {
 	mu      sync.Mutex
@@ -49,6 +53,8 @@ func (m *mockSink) Write(pkt *Packet) error {
 }
 
 func (m *mockSink) Close() error { return nil }
+
+func (m *mockSink) Name() string { return "mockSink" }
 
 func TestPipeline_Run(t *testing.T) {
 	pkt := &Packet{Raw: []byte("test")}
