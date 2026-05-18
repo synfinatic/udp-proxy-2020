@@ -16,6 +16,7 @@ type Pipeline struct {
 
 // NewPipeline creates a new pipeline with the given source.
 func NewPipeline(source Source) *Pipeline {
+	slog.Debug("Creating new pipeline", slog.String("source", source.Name()))
 	return &Pipeline{
 		Source: source,
 	}
@@ -23,11 +24,13 @@ func NewPipeline(source Source) *Pipeline {
 
 // AddProcessor adds a processor to the pipeline.
 func (p *Pipeline) AddProcessor(proc Processor) {
+	slog.Debug("Adding processor to pipeline", slog.String("name", proc.Name()))
 	p.Processors = append(p.Processors, proc)
 }
 
 // AddSink adds a sink to the pipeline.
 func (p *Pipeline) AddSink(sink Sink) {
+	slog.Debug("Adding sink to pipeline", slog.String("name", sink.Name()))
 	p.Sinks = append(p.Sinks, sink)
 }
 

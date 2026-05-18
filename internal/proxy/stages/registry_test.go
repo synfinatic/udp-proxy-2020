@@ -197,7 +197,7 @@ func TestRegistryProcessor_ProcessRefreshesDynamicClient(t *testing.T) {
 		eth: &layers.Ethernet{SrcMAC: oldMAC},
 	}})
 
-	first := reg.clients[ip.String()]
+	first := reg.clients[keyForClient("", ip.String())]
 	if first.LastSeen.IsZero() {
 		t.Fatal("expected LastSeen to be set for dynamic client")
 	}
@@ -209,7 +209,7 @@ func TestRegistryProcessor_ProcessRefreshesDynamicClient(t *testing.T) {
 		eth: &layers.Ethernet{SrcMAC: newMAC},
 	}})
 
-	updated := reg.clients[ip.String()]
+	updated := reg.clients[keyForClient("", ip.String())]
 	if !updated.LastSeen.After(first.LastSeen) {
 		t.Fatalf("expected LastSeen to be refreshed: first=%v updated=%v", first.LastSeen, updated.LastSeen)
 	}
@@ -228,8 +228,8 @@ func TestRegistryProcessor_CleanupExpiresOnlyDynamic(t *testing.T) {
 	freshIP := "192.168.1.11"
 
 	reg.mu.Lock()
-	reg.clients[expiredIP] = ClientInfo{IP: net.ParseIP(expiredIP), LastSeen: time.Now().Add(-2 * time.Second)}
-	reg.clients[freshIP] = ClientInfo{IP: net.ParseIP(freshIP), LastSeen: time.Now()}
+	reg.clients[keyForClient("", expiredIP)] = ClientInfo{IP: net.ParseIP(expiredIP), LastSeen: time.Now().Add(-2 * time.Second)}
+	reg.clients[keyForClient("", freshIP)] = ClientInfo{IP: net.ParseIP(freshIP), LastSeen: time.Now()}
 	reg.mu.Unlock()
 
 	reg.Cleanup()
@@ -242,5 +242,32 @@ func TestRegistryProcessor_CleanupExpiresOnlyDynamic(t *testing.T) {
 	}
 	if !reg.Has("10.1.1.1") {
 		t.Fatal("expected fixed IP to remain after cleanup")
+	}
+}
+
+func TestRegistryProcessor_ProcessForInterfaceTracksSource(t *testing.T) {
+	reg, err := NewRegistryProcessor(time.Hour, nil)
+	if err != nil {
+		t.Fatalf("NewRegistryProcessor failed: %v", err)
+	}
+
+	ip := net.ParseIP("192.168.10.20")
+	keep, err := reg.ProcessForInterface("eth9", &proxy.Packet{Packet: &mockGopacket{ip: &layers.IPv4{SrcIP: ip}}})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if !keep {
+		t.Fatal("expected keep=true")
+	}
+
+	clients := reg.GetClientsForInterface("eth9")
+	if len(clients) != 1 {
+		t.Fatalf("expected one client for eth9, got %d", len(clients))
+	}
+	if clients[0].IP.String() != "192.168.10.20" {
+		t.Fatalf("expected IP 192.168.10.20, got %s", clients[0].IP)
+	}
+	if clients[0].Interface != "eth9" {
+		t.Fatalf("expected interface eth9, got %s", clients[0].Interface)
 	}
 }

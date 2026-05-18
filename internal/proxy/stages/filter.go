@@ -1,6 +1,8 @@
 package stages
 
 import (
+	"fmt"
+
 	"github.com/gopacket/gopacket/layers"
 	"github.com/synfinatic/udp-proxy-2020/internal/proxy"
 )
@@ -23,4 +25,8 @@ func (f *FilterProcessor) Process(pkt *proxy.Packet) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func (f *FilterProcessor) Name() string {
+	return fmt.Sprintf("FilterProcessor:%s", f.Iname)
 }

@@ -62,3 +62,7 @@ func (s *PcapSource) Read(ctx context.Context) (*proxy.Packet, error) {
 func (s *PcapSource) Close() error {
 	return s.dm.Close(s.iname, proxy.Reader)
 }
+
+func (s *PcapSource) Name() string {
+	return "PcapSource:" + s.iname
+}

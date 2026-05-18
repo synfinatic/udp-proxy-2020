@@ -1,6 +1,7 @@
 package stages
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/gopacket/gopacket/pcapgo"
@@ -25,4 +26,11 @@ func (s *PcapFileSink) Close() error {
 		return s.File.Close()
 	}
 	return nil
+}
+
+func (s *PcapFileSink) Name() string {
+	if s.File != nil {
+		return fmt.Sprintf("PcapFileSink:%s", s.File.Name())
+	}
+	return "PcapFileSink:unknown"
 }

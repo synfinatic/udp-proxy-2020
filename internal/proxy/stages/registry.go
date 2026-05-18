@@ -11,9 +11,10 @@ import (
 )
 
 type ClientInfo struct {
-	IP       net.IP
-	LastSeen time.Time // zero = immortal (fixed IP)
-	MAC      net.HardwareAddr
+	IP        net.IP
+	Interface string
+	LastSeen  time.Time // zero = immortal (fixed IP)
+	MAC       net.HardwareAddr
 }
 
 // RegistryProcessor handles client IP learning/caching.
@@ -32,12 +33,37 @@ func NewRegistryProcessor(ttl time.Duration, fixedIPs []string) (*RegistryProces
 		if ip == nil {
 			return nil, fmt.Errorf("invalid fixed IP address: %q", ipStr)
 		}
-		clients[ipStr] = ClientInfo{
-			IP:       ip,
-			LastSeen: time.Time{},        // zero = immortal
-			MAC:      net.HardwareAddr{}, // unknown
+		clients[keyForClient("", ipStr)] = ClientInfo{
+			IP:        ip,
+			Interface: "",
+			LastSeen:  time.Time{},        // zero = immortal
+			MAC:       net.HardwareAddr{}, // unknown
 		}
 	}
+	return &RegistryProcessor{
+		clients: clients,
+		TTL:     ttl,
+	}, nil
+}
+
+// NewRegistryProcessorByInterface creates a shared registry with fixed IPs keyed by interface.
+func NewRegistryProcessorByInterface(ttl time.Duration, fixedIPs map[string][]string) (*RegistryProcessor, error) {
+	clients := make(map[string]ClientInfo)
+	for iname, ips := range fixedIPs {
+		for _, ipStr := range ips {
+			ip := net.ParseIP(ipStr)
+			if ip == nil {
+				return nil, fmt.Errorf("invalid fixed IP address: %q", ipStr)
+			}
+			clients[keyForClient(iname, ipStr)] = ClientInfo{
+				IP:        ip,
+				Interface: iname,
+				LastSeen:  time.Time{},        // zero = immortal
+				MAC:       net.HardwareAddr{}, // unknown
+			}
+		}
+	}
+
 	return &RegistryProcessor{
 		clients: clients,
 		TTL:     ttl,
@@ -67,15 +93,37 @@ func (r *RegistryProcessor) Len() int {
 func (r *RegistryProcessor) Has(ip string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	for key := range r.clients {
-		if key == ip {
+	for _, client := range r.clients {
+		if client.IP.String() == ip {
 			return true
 		}
 	}
 	return false
 }
 
+// GetClientsForInterface returns currently known clients discovered on a specific interface.
+func (r *RegistryProcessor) GetClientsForInterface(iname string) []ClientInfo {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	clients := make([]ClientInfo, 0, len(r.clients))
+	for _, info := range r.clients {
+		if info.Interface == iname {
+			clients = append(clients, info)
+		}
+	}
+	return clients
+}
+
 func (r *RegistryProcessor) Process(pkt *proxy.Packet) (bool, error) {
+	if pkt != nil {
+		return r.ProcessForInterface(pkt.ArrivalInterface, pkt)
+	}
+	return r.ProcessForInterface("", nil)
+}
+
+// ProcessForInterface learns a packet source for the specified interface.
+func (r *RegistryProcessor) ProcessForInterface(iname string, pkt *proxy.Packet) (bool, error) {
 	if r == nil || r.clients == nil {
 		return true, nil
 	}
@@ -107,19 +155,23 @@ func (r *RegistryProcessor) Process(pkt *proxy.Packet) (bool, error) {
 	}
 
 	ipStr := srcIP.String()
-
 	if ipStr == "" {
 		return true, nil
 	}
+	if iname == "" {
+		iname = pkt.ArrivalInterface
+	}
+	clientKey := keyForClient(iname, ipStr)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	// only update if not a fixed client (zero time = immortal)
-	if info, ok := r.clients[ipStr]; !ok || !info.LastSeen.IsZero() {
-		r.clients[ipStr] = ClientInfo{
-			IP:       srcIP,
-			MAC:      srcMAC,
-			LastSeen: time.Now(),
+	if info, ok := r.clients[clientKey]; !ok || !info.LastSeen.IsZero() {
+		r.clients[clientKey] = ClientInfo{
+			IP:        srcIP,
+			Interface: iname,
+			MAC:       srcMAC,
+			LastSeen:  time.Now(),
 		}
 	}
 
@@ -139,4 +191,29 @@ func (r *RegistryProcessor) Cleanup() {
 			delete(r.clients, ip)
 		}
 	}
+}
+
+func (r *RegistryProcessor) Name() string {
+	return "RegistryProcessor"
+}
+
+// RegistryLearnerProcessor binds a shared RegistryProcessor to one source interface.
+type RegistryLearnerProcessor struct {
+	Registry *RegistryProcessor
+	Iname    string
+}
+
+func (p *RegistryLearnerProcessor) Process(pkt *proxy.Packet) (bool, error) {
+	if p == nil || p.Registry == nil {
+		return true, nil
+	}
+	return p.Registry.ProcessForInterface(p.Iname, pkt)
+}
+
+func (p *RegistryLearnerProcessor) Name() string {
+	return fmt.Sprintf("RegistryLearnerProcessor:%s", p.Iname)
+}
+
+func keyForClient(iname, ip string) string {
+	return iname + "|" + ip
 }

@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -73,6 +74,7 @@ func (dm *DeviceManager) GetAddresses(iname string) ([]pcap.InterfaceAddress, er
 
 // CreateHandle initializes a libpcap handle for the given interface.
 func (dm *DeviceManager) CreateReaderHandle(iname string, promisc bool, timeout time.Duration) (*pcap.Handle, error) {
+	slog.Debug("Creating reader handle", slog.String("interface", iname), slog.Bool("promisc", promisc), slog.Duration("timeout", timeout))
 	key := deviceManagerKey(iname, Reader)
 	dm.mu.RLock()
 	if handle, exists := dm.handles[key]; exists {
@@ -170,9 +172,10 @@ func (dm *DeviceManager) CloseHandles() {
 	dm.mu.Lock()
 	defer dm.mu.Unlock()
 
-	for key, handle := range dm.handles {
+	for ifname, handle := range dm.handles {
+		slog.Debug("Closing handle for interface", slog.String("interface", ifname))
 		handle.Close()
-		delete(dm.handles, key)
+		delete(dm.handles, ifname)
 	}
 }
 
@@ -197,6 +200,7 @@ func (dm *DeviceManager) CreateWriterHandle(iname string) (*pcap.Handle, error) 
 		return handle, nil
 	}
 	dm.mu.RUnlock()
+	slog.Debug("Creating writer handle for interface", slog.String("interface", iname))
 
 	inactive, err := pcap.NewInactiveHandle(iname)
 	if err != nil {
@@ -238,6 +242,7 @@ func (dm *DeviceManager) Close(iname string, direction PcapHandleDirection) erro
 		return fmt.Errorf("handle for interface %s with direction %s not found", iname, direction)
 	}
 	handle.Close()
+	slog.Debug("Closed handle for interface", slog.String("interface", iname), slog.String("direction", string(direction)))
 	delete(dm.handles, key)
 	return nil
 }

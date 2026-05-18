@@ -75,3 +75,7 @@ func (t *TransformProcessor) Process(pkt *proxy.Packet) (bool, error) {
 
 	return true, nil
 }
+
+func (t *TransformProcessor) Name() string {
+	return fmt.Sprintf("TransformProcessor:%s", t.DestinationIP.String())
+}

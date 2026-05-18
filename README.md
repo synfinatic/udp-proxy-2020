@@ -163,6 +163,10 @@ These flags are for debugging problems with `udp-proxy-2020`.  You should
 use these flags when I direct you to do so as part of a [ticket](
 https://github.com/synfinatic/udp-proxy-2020/issues) you have opened for `udp-proxy-2020`.
 
+If you need to inspect live packets without opening a capture file, use
+`--decode` to print a one-line decode of each forwarded packet to stdout in a
+format similar to `tcpdump -e`.
+
 ### Where can I download precompiled binaries?
 
 From the [releases page](https://github.com/synfinatic/udp-proxy-2020/releases) on Github.
