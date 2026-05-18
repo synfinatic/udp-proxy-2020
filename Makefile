@@ -154,16 +154,20 @@ $(LINUX_AMD64_S_NAME): .prepare
 ######################################################################
 # Vagrant targets for building for FreeBSD/pfSense
 ######################################################################
-.PHONY: .vagrant-check
 .vagrant-check:
 	@which vagrant >/dev/null || { echo "Please install Vagrant: https://www.vagrantup.com"; exit 1; }
 	@provider=$${VAGRANT_DEFAULT_PROVIDER:-virtualbox}; \
 		if test "$$provider" = "virtualbox" ; then \
 			which VBoxManage >/dev/null || { echo "Please install VirtualBox or set VAGRANT_DEFAULT_PROVIDER: https://www.virtualbox.org"; exit 1; }; \
 		fi
+	@touch .vagrant-check
 
-freebsd: .vagrant-check ## Build all FreeBSD binaries using Vagrant VM (set VAGRANT_DEFAULT_PROVIDER on Apple Silicon)
-	vagrant provision && vagrant up && vagrant ssh-config >.vagrant-ssh && \
+.vagrant-provision: Vagrantfile .vagrant-check
+	vagrant provision && touch .vagrant-provision
+
+freebsd: .vagrant-provision ## Build all FreeBSD binaries using Vagrant VM (set VAGRANT_DEFAULT_PROVIDER on Apple Silicon)
+	@echo "Run `vagrant provision` to reprovision the VM if you have made changes to the Vagrantfile or provisioning scripts."
+	vagrant up && vagrant ssh-config >.vagrant-ssh && \
 		scp -F .vagrant-ssh default:$(PROJECT_NAME)/dist/*freebsd* dist/
 
 freebsd-shell: ## Get a shell in FreeBSD Vagrant VM
@@ -198,9 +202,9 @@ ifeq ($(GOARCH),amd64)
 AMD64_CGO_LDFLAGS := "$$(pkg-config --libs libpcap)"
 AMD64_CGO_CFLAGS := "$$(pkg-config --cflags libpcap)"
 AMD64_CC := ""
-ARM64_CGO_LDFLAGS := "$$(pkg-config --libs libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/arm64)"
-ARM64_CGO_CFLAGS := "$$(pkg-config --cflags libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/arm64)"
-ARM64_CC := /usr/local/freebsd-sysroot/arm64/bin/cc
+ARM64_CGO_LDFLAGS := "$$(pkg-config --libs libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/aarch64)"
+ARM64_CGO_CFLAGS := "$$(pkg-config --cflags libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/aarch64)"
+ARM64_CC := /usr/local/freebsd-sysroot/aarch64/bin/cc
 else ifeq ($(GOARCH),arm64)
 ARM64_CGO_LDFLAGS := "$$(pkg-config --libs libpcap)"
 ARM64_CGO_CFLAGS := "$$(pkg-config --cflags libpcap)"
@@ -210,7 +214,7 @@ AMD64_CGO_CFLAGS := "$$(pkg-config --cflags libpcap --define-variable=prefix=/us
 AMD64_CC := /usr/local/freebsd-sysroot/amd64/bin/cc
 endif
 
-$(FREEBSD_AMD64_S_NAME):
+$(FREEBSD_AMD64_S_NAME): $(wildcard */*.go)
 	GOOS=freebsd GOARCH=amd64 CGO_ENABLED=1 \
 	CGO_LDFLAGS=$(AMD64_CGO_LDFLAGS) \
 	CGO_CFLAGS=$(AMD64_CGO_CFLAGS) \
@@ -219,7 +223,7 @@ $(FREEBSD_AMD64_S_NAME):
 		-o $(FREEBSD_AMD64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(FREEBSD_AMD64_S_NAME)"
 
-$(FREEBSD_ARM64_S_NAME):
+$(FREEBSD_ARM64_S_NAME): $(wildcard */*.go)
 	GOOS=freebsd GOARCH=arm64 CGO_ENABLED=1 \
 	CGO_LDFLAGS=$(ARM64_CGO_LDFLAGS) \
 	CGO_CFLAGS=$(ARM64_CGO_CFLAGS) \
@@ -229,7 +233,7 @@ $(FREEBSD_ARM64_S_NAME):
 	@echo "Created: $(FREEBSD_ARM64_S_NAME)"
 
 
-$(FREEBSD_ARMV7_S_NAME):  # .freebsd-arm-cross
+$(FREEBSD_ARMV7_S_NAME): $(wildcard */*.go)
 	GOOS=freebsd GOARCH=arm GOARM=7 CGO_ENABLED=1 \
 	CGO_LDFLAGS="$$(pkg-config --libs libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/arm7)" \
 	CGO_CFLAGS="$$(pkg-config --cflags libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/arm7)" \

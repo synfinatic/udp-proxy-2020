@@ -22,4 +22,8 @@ dist/
 .DS_Store
 
 # our ssh config file
-.vagrant-ssh  
+.vagrant-ssh
+
+# target files for freebsd build checks
+.vagrant-provision
+.vagrant-check
