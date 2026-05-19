@@ -1,4 +1,4 @@
-package stages
+package rewrite
 
 import (
 	"fmt"
@@ -11,8 +11,8 @@ import (
 
 var broadcastMAC = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 
-// RewriteOptions configures L2/L3 modifications for outbound packets.
-type RewriteOptions struct {
+// Options configures L2/L3 modifications for outbound packets.
+type Options struct {
 	TargetIP               net.IP
 	TargetMAC              net.HardwareAddr
 	SourceMAC              net.HardwareAddr
@@ -23,8 +23,8 @@ type RewriteOptions struct {
 	OutputArrivalInterface string
 }
 
-// RewritePacketForEgress applies destination/source L2/L3 changes and returns a new packet.
-func RewritePacketForEgress(pkt *proxy.Packet, opts RewriteOptions) (*proxy.Packet, error) {
+// PacketForEgress applies destination/source L2/L3 changes and returns a new packet.
+func PacketForEgress(pkt *proxy.Packet, opts Options) (*proxy.Packet, error) {
 	if pkt == nil || pkt.Packet == nil {
 		return nil, fmt.Errorf("packet is nil")
 	}
@@ -121,4 +121,17 @@ func RewritePacketForEgress(pkt *proxy.Packet, opts RewriteOptions) (*proxy.Pack
 		Packet:           packetFromLinkType(raw, opts.EgressLinkType),
 		ArrivalInterface: arrivalIf,
 	}, nil
+}
+
+func packetFromLinkType(raw []byte, linkType layers.LinkType) gopacket.Packet {
+	switch linkType {
+	case layers.LinkTypeNull, layers.LinkTypeLoop:
+		return gopacket.NewPacket(raw, layers.LayerTypeLoopback, gopacket.Default)
+	case layers.LinkTypeEthernet:
+		return gopacket.NewPacket(raw, layers.LayerTypeEthernet, gopacket.Default)
+	case layers.LinkTypeRaw:
+		return gopacket.NewPacket(raw, layers.LayerTypeIPv4, gopacket.Default)
+	default:
+		return gopacket.NewPacket(raw, gopacket.LayerTypePayload, gopacket.Default)
+	}
 }

@@ -166,16 +166,3 @@ func formatMAC(mac net.HardwareAddr) string {
 	}
 	return mac.String()
 }
-
-func packetFromLinkType(raw []byte, linkType layers.LinkType) gopacket.Packet {
-	switch linkType {
-	case layers.LinkTypeNull, layers.LinkTypeLoop:
-		return gopacket.NewPacket(raw, layers.LayerTypeLoopback, gopacket.Default)
-	case layers.LinkTypeEthernet:
-		return gopacket.NewPacket(raw, layers.LayerTypeEthernet, gopacket.Default)
-	case layers.LinkTypeRaw:
-		return gopacket.NewPacket(raw, layers.LayerTypeIPv4, gopacket.Default)
-	default:
-		return gopacket.NewPacket(raw, gopacket.LayerTypePayload, gopacket.Default)
-	}
-}
