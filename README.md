@@ -104,6 +104,9 @@ Advanced options:
    don't have a fixed ip.
 * `--no-listen` -- Do not listen on the specified UDP port(s) to avoid conflicts
 * `--deliver-local` -- Deliver packets locally on loopback interface
+* `--graph-pipeline` -- Generate a Graphviz dot file at the specified path containing a visualization
+   of the pipeline architecture. When used, requires `--interface` (2 or more) and `--port` to be specified,
+   and will exit after generating the file. Use with `dot -Tpng out.dot -o out.png` to create a PNG image.
 
 There are other flags of course, run `./udp-proxy-2020 --help` for a full list.
 

@@ -52,6 +52,15 @@ func main() {
 		return
 	}
 
+	if cli.GraphPipeline != "" {
+		if err := GenerateDotFile(pipelines, cli.GraphPipeline); err != nil {
+			slog.Error("Failed to generate dot file", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("Successfully generated Graphviz dot file", "path", cli.GraphPipeline)
+		os.Exit(0)
+	}
+
 	go func() {
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
