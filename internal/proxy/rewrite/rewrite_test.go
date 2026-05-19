@@ -1,4 +1,5 @@
-package stages
+package rewrite
+package rewrite
 
 import (
 	"bytes"
@@ -10,19 +11,6 @@ import (
 	"github.com/gopacket/gopacket/layers"
 	"github.com/synfinatic/udp-proxy-2020/internal/proxy"
 )
-
-type captureSink struct {
-	packets []*proxy.Packet
-}
-
-func (s *captureSink) Write(pkt *proxy.Packet) error {
-	s.packets = append(s.packets, pkt)
-	return nil
-}
-
-func (s *captureSink) Name() string { return "captureSink" }
-
-func (s *captureSink) Close() error { return nil }
 
 func buildUDPPacketForLinkType(t *testing.T, linkType layers.LinkType, srcIP, dstIP net.IP, srcMAC, dstMAC net.HardwareAddr, payload []byte, iname string) *proxy.Packet {
 	t.Helper()
@@ -77,7 +65,7 @@ func buildEthernetPacket(t *testing.T, srcIP, dstIP net.IP, srcMAC, dstMAC net.H
 	return buildUDPPacketForLinkType(t, layers.LinkTypeEthernet, srcIP, dstIP, srcMAC, dstMAC, payload, iname)
 }
 
-func TestRewritePacketForEgress_CrossLinkType_EthernetToRaw(t *testing.T) {
+func TestPacketForEgress_CrossLinkType_EthernetToRaw(t *testing.T) {
 	pkt := buildUDPPacketForLinkType(
 		t,
 		layers.LinkTypeEthernet,
@@ -89,12 +77,12 @@ func TestRewritePacketForEgress_CrossLinkType_EthernetToRaw(t *testing.T) {
 		"eth-in",
 	)
 
-	out, err := RewritePacketForEgress(pkt, RewriteOptions{
+	out, err := PacketForEgress(pkt, Options{
 		TargetIP:       net.IP{10, 0, 1, 60},
 		EgressLinkType: layers.LinkTypeRaw,
 	})
 	if err != nil {
-		t.Fatalf("RewritePacketForEgress failed: %v", err)
+		t.Fatalf("PacketForEgress failed: %v", err)
 	}
 
 	if out.Packet.Layer(layers.LayerTypeEthernet) != nil {
@@ -113,7 +101,7 @@ func TestRewritePacketForEgress_CrossLinkType_EthernetToRaw(t *testing.T) {
 	}
 }
 
-func TestRewritePacketForEgress_CrossLinkType_EthernetToLoopback(t *testing.T) {
+func TestPacketForEgress_CrossLinkType_EthernetToLoopback(t *testing.T) {
 	tests := []struct {
 		name       string
 		egressType layers.LinkType
@@ -135,12 +123,12 @@ func TestRewritePacketForEgress_CrossLinkType_EthernetToLoopback(t *testing.T) {
 				"eth-in",
 			)
 
-			out, err := RewritePacketForEgress(pkt, RewriteOptions{
+			out, err := PacketForEgress(pkt, Options{
 				TargetIP:       net.IP{10, 0, 1, 61},
 				EgressLinkType: tc.egressType,
 			})
 			if err != nil {
-				t.Fatalf("RewritePacketForEgress failed: %v", err)
+				t.Fatalf("PacketForEgress failed: %v", err)
 			}
 
 			if out.Packet.Layer(layers.LayerTypeEthernet) != nil {
@@ -153,7 +141,7 @@ func TestRewritePacketForEgress_CrossLinkType_EthernetToLoopback(t *testing.T) {
 	}
 }
 
-func TestRewritePacketForEgress_CrossLinkType_RawToEthernet(t *testing.T) {
+func TestPacketForEgress_CrossLinkType_RawToEthernet(t *testing.T) {
 	pkt := buildUDPPacketForLinkType(
 		t,
 		layers.LinkTypeRaw,
@@ -165,7 +153,7 @@ func TestRewritePacketForEgress_CrossLinkType_RawToEthernet(t *testing.T) {
 		"tun0",
 	)
 
-	out, err := RewritePacketForEgress(pkt, RewriteOptions{
+	out, err := PacketForEgress(pkt, Options{
 		TargetIP:             net.IP{10, 0, 1, 62},
 		TargetMAC:            net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff},
 		SourceMAC:            net.HardwareAddr{0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc},
@@ -173,7 +161,7 @@ func TestRewritePacketForEgress_CrossLinkType_RawToEthernet(t *testing.T) {
 		AllowBroadcastDstMAC: true,
 	})
 	if err != nil {
-		t.Fatalf("RewritePacketForEgress failed: %v", err)
+		t.Fatalf("PacketForEgress failed: %v", err)
 	}
 
 	ethLayer := out.Packet.Layer(layers.LayerTypeEthernet)
@@ -189,7 +177,7 @@ func TestRewritePacketForEgress_CrossLinkType_RawToEthernet(t *testing.T) {
 	}
 }
 
-func TestRewritePacketForEgress_UnicastEthernet(t *testing.T) {
+func TestPacketForEgress_UnicastEthernet(t *testing.T) {
 	pkt := buildEthernetPacket(
 		t,
 		net.IP{10, 0, 0, 1},
@@ -200,7 +188,7 @@ func TestRewritePacketForEgress_UnicastEthernet(t *testing.T) {
 		"eth-in",
 	)
 
-	out, err := RewritePacketForEgress(pkt, RewriteOptions{
+	out, err := PacketForEgress(pkt, Options{
 		TargetIP:               net.IP{10, 0, 1, 50},
 		TargetMAC:              net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff},
 		SourceMAC:              net.HardwareAddr{0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc},
@@ -209,7 +197,7 @@ func TestRewritePacketForEgress_UnicastEthernet(t *testing.T) {
 		OutputArrivalInterface: "eth-out",
 	})
 	if err != nil {
-		t.Fatalf("RewritePacketForEgress failed: %v", err)
+		t.Fatalf("PacketForEgress failed: %v", err)
 	}
 
 	if bytes.Equal(pkt.Raw, out.Raw) {
@@ -238,7 +226,7 @@ func TestRewritePacketForEgress_UnicastEthernet(t *testing.T) {
 	}
 }
 
-func TestRewritePacketForEgress_StaticUnknownMACFallsBackToBroadcast(t *testing.T) {
+func TestPacketForEgress_StaticUnknownMACFallsBackToBroadcast(t *testing.T) {
 	pkt := buildEthernetPacket(
 		t,
 		net.IP{10, 0, 0, 1},
@@ -249,23 +237,23 @@ func TestRewritePacketForEgress_StaticUnknownMACFallsBackToBroadcast(t *testing.
 		"eth-in",
 	)
 
-	out, err := RewritePacketForEgress(pkt, RewriteOptions{
+	out, err := PacketForEgress(pkt, Options{
 		TargetIP:             net.IP{10, 0, 1, 51},
 		SourceMAC:            net.HardwareAddr{0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc},
 		EgressLinkType:       layers.LinkTypeEthernet,
 		AllowBroadcastDstMAC: true,
 	})
 	if err != nil {
-		t.Fatalf("RewritePacketForEgress failed: %v", err)
+		t.Fatalf("PacketForEgress failed: %v", err)
 	}
 
 	eth := out.Packet.Layer(layers.LayerTypeEthernet).(*layers.Ethernet)
-	if !bytes.Equal(eth.DstMAC, broadcastMAC) {
+	if !bytes.Equal(eth.DstMAC, net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}) {
 		t.Fatalf("expected broadcast destination MAC, got %s", eth.DstMAC)
 	}
 }
 
-func TestRewritePacketForEgress_UnknownMACWithoutBroadcastFails(t *testing.T) {
+func TestPacketForEgress_UnknownMACWithoutBroadcastFails(t *testing.T) {
 	pkt := buildEthernetPacket(
 		t,
 		net.IP{10, 0, 0, 1},
@@ -276,7 +264,7 @@ func TestRewritePacketForEgress_UnknownMACWithoutBroadcastFails(t *testing.T) {
 		"eth-in",
 	)
 
-	_, err := RewritePacketForEgress(pkt, RewriteOptions{
+	_, err := PacketForEgress(pkt, Options{
 		TargetIP:             net.IP{10, 0, 1, 51},
 		SourceMAC:            net.HardwareAddr{0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc},
 		EgressLinkType:       layers.LinkTypeEthernet,
@@ -284,93 +272,5 @@ func TestRewritePacketForEgress_UnknownMACWithoutBroadcastFails(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error when target mac missing on non-broadcast interface")
-	}
-}
-
-func TestRouteSink_FanoutPerClient(t *testing.T) {
-	reg, err := NewRegistryProcessorByInterface(time.Hour, map[string][]string{
-		"eth-out": {"10.0.1.10", "10.0.1.11"},
-	})
-	if err != nil {
-		t.Fatalf("registry init failed: %v", err)
-	}
-
-	capture := &captureSink{}
-	writer := &mockWriter{linkType: layers.LinkTypeEthernet}
-	route := &RouteSink{
-		Iname:            "eth-out",
-		Broadcast:        true,
-		BroadcastAddress: net.IP{10, 0, 1, 255},
-		HardwareAddr:     net.HardwareAddr{0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc},
-		Registry:         reg,
-		LinkType:         writer,
-		Sinks:            []proxy.Sink{capture},
-	}
-
-	pkt := buildEthernetPacket(
-		t,
-		net.IP{10, 0, 0, 1},
-		net.IP{10, 0, 0, 2},
-		net.HardwareAddr{0, 1, 2, 3, 4, 5},
-		net.HardwareAddr{6, 7, 8, 9, 10, 11},
-		[]byte("hello"),
-		"eth-in",
-	)
-
-	if err := route.Write(pkt); err != nil {
-		t.Fatalf("route write failed: %v", err)
-	}
-
-	if len(capture.packets) != 2 {
-		t.Fatalf("expected 2 rewritten packets, got %d", len(capture.packets))
-	}
-}
-
-func TestRouteSink_UsesEgressInterfaceClients(t *testing.T) {
-	reg, err := NewRegistryProcessorByInterface(time.Hour, map[string][]string{
-		"eth-in":  {"10.0.0.99"},
-		"eth-out": {"10.0.1.42"},
-	})
-	if err != nil {
-		t.Fatalf("registry init failed: %v", err)
-	}
-
-	capture := &captureSink{}
-	writer := &mockWriter{linkType: layers.LinkTypeEthernet}
-	route := &RouteSink{
-		Iname:            "eth-out",
-		Broadcast:        true,
-		BroadcastAddress: net.IP{10, 0, 1, 255},
-		HardwareAddr:     net.HardwareAddr{0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc},
-		Registry:         reg,
-		LinkType:         writer,
-		Sinks:            []proxy.Sink{capture},
-	}
-
-	pkt := buildEthernetPacket(
-		t,
-		net.IP{10, 0, 0, 1},
-		net.IP{10, 0, 0, 2},
-		net.HardwareAddr{0, 1, 2, 3, 4, 5},
-		net.HardwareAddr{6, 7, 8, 9, 10, 11},
-		[]byte("hello"),
-		"eth-in",
-	)
-
-	if err := route.Write(pkt); err != nil {
-		t.Fatalf("route write failed: %v", err)
-	}
-
-	if len(capture.packets) != 1 {
-		t.Fatalf("expected 1 rewritten packet, got %d", len(capture.packets))
-	}
-
-	ipLayer := capture.packets[0].Packet.Layer(layers.LayerTypeIPv4)
-	if ipLayer == nil {
-		t.Fatal("missing IPv4 layer")
-	}
-	ipv4 := ipLayer.(*layers.IPv4)
-	if !ipv4.DstIP.Equal(net.IP{10, 0, 1, 42}) {
-		t.Fatalf("expected destination IP 10.0.1.42, got %s", ipv4.DstIP)
 	}
 }
