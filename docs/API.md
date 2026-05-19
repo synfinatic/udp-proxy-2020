@@ -8,11 +8,11 @@ The system is built on four primary components:
 
 1. **DeviceManager**: Handles discovery and initialization of physical network interfaces using `libpcap`.
 2. **PacketBus**: A subscription-based message bus that routes packets from one interface's pipeline to all other active interface pipelines.
-3. **Pipeline**: Orchestrates the flow of a single packet through a series of stages.
+3. **Pipeline**: Orchestrates the flow of a single packet through a series of stages. Pipeline setup is modular and intentionally declarative, with sources, processors, and sinks added in explicit order.
 4. **Stages**: Modular components that perform specific tasks:
     * **Sources**: Capture packets (e.g., `PcapSource`).
     * **Processors**: Filter, transform, or learn from packets (e.g., `FilterProcessor`, `RegistryProcessor`).
-    * **Sinks**: Terminal points for packets (e.g., `ForwardingSink`, `TransmitterSink`, `PcapFileSink`).
+    * **Sinks**: Terminal points for packets (e.g., `ForwardingSink`, `RouteSink`, `TransmitterSink`, `PcapFileSink`).
 
 ## Key Features
 
@@ -115,3 +115,32 @@ func main() {
 6. The `TransmitterSink` for `vpn0` receives the message. It checks its `RegistryProcessor`.
 7. The `vpn0` Registry finds the fixed IP `192.168.10.50`.
 8. The `TransmitterSink` builds a new UDP packet and sends it out of `vpn0` to `192.168.10.50`.
+
+---
+
+## Pipeline Stages: Sources, Processors, and Sinks
+
+### Sources
+
+* **PcapSource**: Reads packets from a libpcap handle (network interface). Feeds packets into the pipeline for processing.
+
+### Processors
+
+* **FilterProcessor**: Drops packets that are not valid UDP/IPv4. Ensures only relevant packets are processed downstream.
+* **RegistryProcessor**: Learns and caches client IPs per interface. Supports both dynamic learning and fixed (immortal) IPs for always-on delivery.
+* **DecodeProcessor**: Prints a one-line summary of each packet (like `tcpdump -e`) for debugging or logging. Can be enabled per interface for inbound and/or outbound directions.
+* **TransformProcessor**: Modifies packet headers (e.g., destination IP) and recalculates checksums. Used for NAT or packet rewriting scenarios.
+* **RewriteProcessor**: Applies L2/L3 changes to outbound packets, such as updating MAC addresses or forcing broadcast destination MACs.
+
+### Sinks
+
+* **ForwardingSink**: Publishes packets to the `PacketBus`, distributing them to other interface pipelines.
+* **RouteSink**: Fans out packets per destination, rewrites them as needed, and forwards to downstream sinks (e.g., for multi-destination delivery).
+* **TransmitterSink**: Sends packets to a physical network interface using a libpcap writer handle.
+* **PcapFileSink**: Writes packets to a `.pcap` file for offline analysis or debugging. Can be enabled for inbound and outbound traffic capture.
+
+---
+
+## Adding Custom Stages
+
+To add a new processor or sink, implement the appropriate interface (`Processor` or `Sink`) and insert it into the pipeline using `AddProcessor` or `AddSink` during pipeline assembly. The current setup path is organized around small helper functions for per-interface and cross-interface wiring, which makes it easier to add or swap stages without growing setup complexity. See the `stages/` directory for examples.

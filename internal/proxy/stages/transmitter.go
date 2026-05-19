@@ -2,6 +2,7 @@ package stages
 
 import (
 	"fmt"
+
 	"github.com/synfinatic/udp-proxy-2020/internal/proxy"
 )
 
