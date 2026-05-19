@@ -24,7 +24,7 @@ func (s *captureSink) Name() string { return "captureSink" }
 
 func (s *captureSink) Close() error { return nil }
 
-func buildEthernetPacket(t *testing.T, srcIP, dstIP net.IP, srcMAC, dstMAC net.HardwareAddr, payload []byte, iname string) *proxy.Packet {
+func buildUDPPacketForLinkType(t *testing.T, linkType layers.LinkType, srcIP, dstIP net.IP, srcMAC, dstMAC net.HardwareAddr, payload []byte, iname string) *proxy.Packet {
 	t.Helper()
 
 	ip := &layers.IPv4{
@@ -39,11 +39,24 @@ func buildEthernetPacket(t *testing.T, srcIP, dstIP net.IP, srcMAC, dstMAC net.H
 	if err := udp.SetNetworkLayerForChecksum(ip); err != nil {
 		t.Fatalf("SetNetworkLayerForChecksum failed: %v", err)
 	}
-	eth := &layers.Ethernet{SrcMAC: srcMAC, DstMAC: dstMAC, EthernetType: layers.EthernetTypeIPv4}
 
 	buf := gopacket.NewSerializeBuffer()
 	opts := gopacket.SerializeOptions{FixLengths: true, ComputeChecksums: true}
-	if err := gopacket.SerializeLayers(buf, opts, eth, ip, udp, gopacket.Payload(payload)); err != nil {
+
+	var layersToSerialize []gopacket.SerializableLayer
+	switch linkType {
+	case layers.LinkTypeEthernet:
+		layersToSerialize = append(layersToSerialize, &layers.Ethernet{SrcMAC: srcMAC, DstMAC: dstMAC, EthernetType: layers.EthernetTypeIPv4})
+	case layers.LinkTypeNull, layers.LinkTypeLoop:
+		layersToSerialize = append(layersToSerialize, &layers.Loopback{Family: layers.ProtocolFamilyIPv4})
+	case layers.LinkTypeRaw:
+		// No L2 header.
+	default:
+		t.Fatalf("unsupported link type in test helper: %v", linkType)
+	}
+
+	layersToSerialize = append(layersToSerialize, ip, udp, gopacket.Payload(payload))
+	if err := gopacket.SerializeLayers(buf, opts, layersToSerialize...); err != nil {
 		t.Fatalf("SerializeLayers failed: %v", err)
 	}
 
@@ -55,8 +68,124 @@ func buildEthernetPacket(t *testing.T, srcIP, dstIP net.IP, srcMAC, dstMAC net.H
 			CaptureLength: len(raw),
 			Length:        len(raw),
 		},
-		Packet:           gopacket.NewPacket(raw, layers.LayerTypeEthernet, gopacket.Default),
+		Packet:           packetFromLinkType(raw, linkType),
 		ArrivalInterface: iname,
+	}
+}
+
+func buildEthernetPacket(t *testing.T, srcIP, dstIP net.IP, srcMAC, dstMAC net.HardwareAddr, payload []byte, iname string) *proxy.Packet {
+	return buildUDPPacketForLinkType(t, layers.LinkTypeEthernet, srcIP, dstIP, srcMAC, dstMAC, payload, iname)
+}
+
+func TestRewritePacketForEgress_CrossLinkType_EthernetToRaw(t *testing.T) {
+	pkt := buildUDPPacketForLinkType(
+		t,
+		layers.LinkTypeEthernet,
+		net.IP{10, 0, 0, 1},
+		net.IP{10, 0, 0, 2},
+		net.HardwareAddr{0, 1, 2, 3, 4, 5},
+		net.HardwareAddr{6, 7, 8, 9, 10, 11},
+		[]byte("hello"),
+		"eth-in",
+	)
+
+	out, err := RewritePacketForEgress(pkt, RewriteOptions{
+		TargetIP:       net.IP{10, 0, 1, 60},
+		EgressLinkType: layers.LinkTypeRaw,
+	})
+	if err != nil {
+		t.Fatalf("RewritePacketForEgress failed: %v", err)
+	}
+
+	if out.Packet.Layer(layers.LayerTypeEthernet) != nil {
+		t.Fatal("did not expect ethernet layer on raw egress")
+	}
+	if out.Packet.Layer(layers.LayerTypeLoopback) != nil {
+		t.Fatal("did not expect loopback layer on raw egress")
+	}
+	ipLayer := out.Packet.Layer(layers.LayerTypeIPv4)
+	if ipLayer == nil {
+		t.Fatal("expected ipv4 layer on raw egress")
+	}
+	ip4 := ipLayer.(*layers.IPv4)
+	if !ip4.DstIP.Equal(net.IP{10, 0, 1, 60}) {
+		t.Fatalf("unexpected dst ip: %s", ip4.DstIP)
+	}
+}
+
+func TestRewritePacketForEgress_CrossLinkType_EthernetToLoopback(t *testing.T) {
+	tests := []struct {
+		name       string
+		egressType layers.LinkType
+	}{
+		{name: "loop", egressType: layers.LinkTypeLoop},
+		{name: "null", egressType: layers.LinkTypeNull},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			pkt := buildUDPPacketForLinkType(
+				t,
+				layers.LinkTypeEthernet,
+				net.IP{10, 0, 0, 1},
+				net.IP{10, 0, 0, 2},
+				net.HardwareAddr{0, 1, 2, 3, 4, 5},
+				net.HardwareAddr{6, 7, 8, 9, 10, 11},
+				[]byte("hello"),
+				"eth-in",
+			)
+
+			out, err := RewritePacketForEgress(pkt, RewriteOptions{
+				TargetIP:       net.IP{10, 0, 1, 61},
+				EgressLinkType: tc.egressType,
+			})
+			if err != nil {
+				t.Fatalf("RewritePacketForEgress failed: %v", err)
+			}
+
+			if out.Packet.Layer(layers.LayerTypeEthernet) != nil {
+				t.Fatal("did not expect ethernet layer on loop/null egress")
+			}
+			if out.Packet.Layer(layers.LayerTypeLoopback) == nil {
+				t.Fatal("expected loopback layer on loop/null egress")
+			}
+		})
+	}
+}
+
+func TestRewritePacketForEgress_CrossLinkType_RawToEthernet(t *testing.T) {
+	pkt := buildUDPPacketForLinkType(
+		t,
+		layers.LinkTypeRaw,
+		net.IP{10, 0, 0, 1},
+		net.IP{10, 0, 0, 2},
+		net.HardwareAddr{},
+		net.HardwareAddr{},
+		[]byte("hello"),
+		"tun0",
+	)
+
+	out, err := RewritePacketForEgress(pkt, RewriteOptions{
+		TargetIP:             net.IP{10, 0, 1, 62},
+		TargetMAC:            net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff},
+		SourceMAC:            net.HardwareAddr{0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc},
+		EgressLinkType:       layers.LinkTypeEthernet,
+		AllowBroadcastDstMAC: true,
+	})
+	if err != nil {
+		t.Fatalf("RewritePacketForEgress failed: %v", err)
+	}
+
+	ethLayer := out.Packet.Layer(layers.LayerTypeEthernet)
+	if ethLayer == nil {
+		t.Fatal("expected ethernet layer")
+	}
+	eth := ethLayer.(*layers.Ethernet)
+	if !bytes.Equal(eth.SrcMAC, net.HardwareAddr{0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc}) {
+		t.Fatalf("unexpected src mac: %s", eth.SrcMAC)
+	}
+	if !bytes.Equal(eth.DstMAC, net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff}) {
+		t.Fatalf("unexpected dst mac: %s", eth.DstMAC)
 	}
 }
 
