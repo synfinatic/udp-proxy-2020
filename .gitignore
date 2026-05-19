@@ -27,4 +27,4 @@ dist/
 # target files for freebsd build checks
 .vagrant-provision
 .vagrant-check 
-udp-proxy-2020
+./udp-proxy-2020
