@@ -293,21 +293,43 @@ func setupPipelines(cli CLI, dm *proxy.DeviceManager, timeout, ttl time.Duration
 	}
 
 	if err := attachCrossInterfaceSinks(states, func(src, dst ifaceState) error {
-		transmitter, err := stages.NewTransmitterSink(
-			dm,
-			dst.name,
-			dst.broadcast,
-			dst.bcastIP,
-			dst.netif.HardwareAddr,
-			nil,
-			registry,
-			cli.Decode,
-		)
+		transmitter, err := stages.NewTransmitterSink(dm, dst.name)
 		if err != nil {
 			slog.Error("Failed to create transmitter sink", "source_interface", src.name, "target_interface", dst.name, "error", err)
 			return fmt.Errorf("failed to create transmitter sink from %s to %s", src.name, dst.name)
 		}
-		src.pipeline.AddSink(transmitter)
+
+		route := &stages.RouteSink{
+			Iname:            dst.name,
+			Broadcast:        dst.broadcast,
+			BroadcastAddress: dst.bcastIP,
+			HardwareAddr:     dst.netif.HardwareAddr,
+			Registry:         registry,
+			LinkType:         transmitter.Writer,
+		}
+
+		if cli.Decode {
+			route.Processors = append(route.Processors, stages.NewDecodeProcessor(dst.name, stages.DirectionOutbound, os.Stdout))
+		}
+
+		if cli.Pcap {
+			fPath := filepath.Join(cli.PcapPath, fmt.Sprintf("udp-proxy-out-%s-to-%s.pcap", src.name, dst.name))
+			f, err := os.Create(fPath)
+			if err != nil {
+				slog.Error("Failed to create outbound pcap file", "error", err)
+				return fmt.Errorf("failed to create outbound pcap file: %s", fPath)
+			}
+			w := pcapgo.NewWriter(f)
+			if err = w.WriteFileHeader(65536, transmitter.Writer.LinkType()); err != nil {
+				f.Close()
+				slog.Error("Failed to write outbound pcap file header", "error", err)
+				return fmt.Errorf("failed to write outbound pcap file header: %s", fPath)
+			}
+			route.Sinks = append(route.Sinks, &stages.PcapFileSink{Writer: w, File: f})
+		}
+
+		route.Sinks = append(route.Sinks, transmitter)
+		src.pipeline.AddSink(route)
 		return nil
 	}); err != nil {
 		return nil, nil, err
