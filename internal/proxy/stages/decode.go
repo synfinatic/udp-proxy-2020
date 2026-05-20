@@ -94,32 +94,41 @@ func (d *DecodeProcessor) formatPacket(pkt *proxy.Packet) string {
 }
 
 func formatLinkSummary(packet gopacket.Packet) string {
+	var eth *layers.Ethernet
+	var ok bool
 	if packet == nil {
 		return ""
 	}
 
 	if ethLayer := packet.Layer(layers.LayerTypeEthernet); ethLayer != nil {
-		if eth, ok := ethLayer.(*layers.Ethernet); ok {
+		if eth, ok = ethLayer.(*layers.Ethernet); ok {
 			return fmt.Sprintf(
-				"%s > %s, ethertype %s (0x%04x), length %d:",
+				"%s > %s, ethertype %s, length %d:",
 				formatMAC(eth.SrcMAC),
 				formatMAC(eth.DstMAC),
 				eth.EthernetType,
-				uint16(eth.EthernetType),
 				len(packet.Data()),
 			)
 		}
 	}
 
 	if packet.Layer(layers.LayerTypeLoopback) != nil {
-		return fmt.Sprintf("loopback, ethertype IPv4 (0x0800), length %d:", len(packet.Data()))
+		if ipv4, ok := packet.Layer(layers.LayerTypeIPv4).(*layers.IPv4); ok {
+			return fmt.Sprintf("loopback IPv4, IPID: 0x%04x, length %d:", ipv4.Id, len(packet.Data()))
+		} else if ipv6, ok := packet.Layer(layers.LayerTypeIPv6).(*layers.IPv6); ok {
+			return fmt.Sprintf("loopback IPv6, FlowLabel: %d, length %d:", ipv6.FlowLabel, len(packet.Data()))
+		}
 	}
 
 	if ipLayer := packet.Layer(layers.LayerTypeIPv4); ipLayer != nil {
-		return fmt.Sprintf("ethertype IPv4 (0x0800), length %d:", len(packet.Data()))
+		if ipv4, ok := ipLayer.(*layers.IPv4); ok {
+			return fmt.Sprintf("ethertype IPv4, IPID: 0x%04x, length %d:", ipv4.Id, len(packet.Data()))
+		} else if ipv6, ok := packet.Layer(layers.LayerTypeIPv6).(*layers.IPv6); ok {
+			return fmt.Sprintf("ethertype IPv6, FlowLabel: %d, length %d:", ipv6.FlowLabel, len(packet.Data()))
+		}
 	}
 
-	return fmt.Sprintf("length %d:", len(packet.Data()))
+	return fmt.Sprintf("ethertype (0x%04x), length %d:", uint16(eth.EthernetType), len(packet.Data()))
 }
 
 func formatNetworkSummary(packet gopacket.Packet) string {
@@ -141,12 +150,13 @@ func formatNetworkSummary(packet gopacket.Packet) string {
 			}
 
 			return fmt.Sprintf(
-				"%s.%d > %s.%d: UDP, length %d",
+				"%s:%d > %s:%d: UDP, length %d, IPID: 0x%04x",
 				ipv4.SrcIP,
 				udp.SrcPort,
 				ipv4.DstIP,
 				udp.DstPort,
 				payloadLen,
+				ipv4.Id,
 			)
 		}
 	}
