@@ -1,5 +1,4 @@
 package rewrite
-package rewrite
 
 import (
 	"bytes"

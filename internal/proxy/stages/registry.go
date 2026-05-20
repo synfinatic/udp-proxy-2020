@@ -2,6 +2,7 @@ package stages
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
 	"sync"
 	"time"
@@ -165,8 +166,17 @@ func (r *RegistryProcessor) ProcessForInterface(iname string, pkt *proxy.Packet)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	// only update if not a fixed client (zero time = immortal)
-	if info, ok := r.clients[clientKey]; !ok || !info.LastSeen.IsZero() {
+	if info, ok := r.clients[clientKey]; !ok {
+		slog.Info("Learned new client", slog.String("interface", iname), slog.String("ip", ipStr), slog.String("mac", srcMAC.String()))
+		r.clients[clientKey] = ClientInfo{
+			IP:        srcIP,
+			Interface: iname,
+			MAC:       srcMAC,
+			LastSeen:  time.Now(),
+		}
+	} else if !info.LastSeen.IsZero() {
+		// update last seen for existing non-immortal client
+		slog.Debug("Updating last seen for existing client", slog.String("interface", iname), slog.String("ip", ipStr), slog.String("mac", srcMAC.String()))
 		r.clients[clientKey] = ClientInfo{
 			IP:        srcIP,
 			Interface: iname,
@@ -188,6 +198,7 @@ func (r *RegistryProcessor) Cleanup() {
 			continue // immortal fixed IP
 		}
 		if now.Sub(info.LastSeen) > r.TTL {
+			slog.Info("Removing expired client", slog.String("interface", info.Interface), slog.String("ip", info.IP.String()), slog.String("mac", info.MAC.String()))
 			delete(r.clients, ip)
 		}
 	}

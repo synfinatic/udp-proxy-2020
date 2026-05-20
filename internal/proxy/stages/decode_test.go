@@ -12,7 +12,7 @@ import (
 	"github.com/synfinatic/udp-proxy-2020/internal/proxy"
 )
 
-func TestDecodeProcessor_Process_WritesTcpdumpStyleSummary(t *testing.T) {
+func TestDecodeProcessor_Process_WritesSummary(t *testing.T) {
 	srcMAC, err := net.ParseMAC("00:11:22:33:44:55")
 	if err != nil {
 		t.Fatalf("ParseMAC src failed: %v", err)
@@ -34,8 +34,9 @@ func TestDecodeProcessor_Process_WritesTcpdumpStyleSummary(t *testing.T) {
 		Protocol: layers.IPProtocolUDP,
 		SrcIP:    net.IP{192, 168, 1, 10}.To4(),
 		DstIP:    net.IP{239, 255, 255, 250}.To4(),
+		Id:       12345,
 	}
-	udp := &layers.UDP{SrcPort: 5678, DstPort: 1900}
+	udp := &layers.UDP{SrcPort: 5678, DstPort: 1900, Length: 5}
 	if err := udp.SetNetworkLayerForChecksum(ip); err != nil {
 		t.Fatalf("SetNetworkLayerForChecksum failed: %v", err)
 	}
@@ -69,8 +70,8 @@ func TestDecodeProcessor_Process_WritesTcpdumpStyleSummary(t *testing.T) {
 	wants := []string{
 		"12:34:56.123000",
 		"eth0",
-		"00:11:22:33:44:55 > 66:77:88:99:aa:bb, ethertype IPv4 (0x0800)",
-		"192.168.1.10.5678 > 239.255.255.250.1900: UDP, length 5",
+		"00:11:22:33:44:55 > 66:77:88:99:aa:bb, ethertype IPv4, length 60",
+		"192.168.1.10:5678 > 239.255.255.250:1900: UDP, length 5, IPID: 0x3039",
 	}
 	for _, want := range wants {
 		if !strings.Contains(got, want) {

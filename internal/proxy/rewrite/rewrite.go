@@ -55,12 +55,15 @@ func PacketForEgress(pkt *proxy.Packet, opts Options) (*proxy.Packet, error) {
 	}
 
 	newIP4 := layers.IPv4{
-		Version:  4,
-		IHL:      5,
-		TTL:      ipv4.TTL,
-		Protocol: layers.IPProtocolUDP,
-		SrcIP:    ipv4.SrcIP.To4(),
-		DstIP:    opts.TargetIP.To4(),
+		Version:    4,
+		IHL:        5,
+		TTL:        ipv4.TTL,
+		Protocol:   layers.IPProtocolUDP,
+		SrcIP:      ipv4.SrcIP.To4(),
+		DstIP:      opts.TargetIP.To4(),
+		Id:         ipv4.Id,
+		Flags:      ipv4.Flags,
+		FragOffset: ipv4.FragOffset,
 	}
 
 	newUDP := layers.UDP{
