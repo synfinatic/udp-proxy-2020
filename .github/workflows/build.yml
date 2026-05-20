@@ -9,7 +9,7 @@ on:
 
 env:
   LIBPCAP_VERSION: 1.10.3
-  FREEBSD_VERSION: 14.3
+  FREEBSD_VERSION: 14.2
 
 jobs:
   linux-arm32:
@@ -279,10 +279,11 @@ jobs:
           # https://github.com/marketplace/actions/freebsd-vm 
           uses: vmactions/freebsd-vm@v1
           with:
+            disable-cache: true
             release: '${{ env.FREEBSD_VERSION }}'
             usesh: true
             prepare: |
-                pkg install -y wget bash git gmake go libpcap pkgconf \
+                pkg install -y wget bash git gmake go libpcap pkgconf pcre2 \
                   aarch64-binutils arm-gnueabi-binutils amd64-binutils \
                   aarch64-freebsd-sysroot amd64-freebsd-sysroot armv7-freebsd-sysroot 
             run: |
@@ -297,8 +298,9 @@ jobs:
             ls dist/udp-proxy-2020*-freebsd-amd64 >/dev/null 2>&1 || { echo "Missing FreeBSD amd64 artifact"; exit 1; }
             ls dist/udp-proxy-2020*-freebsd-arm64 >/dev/null 2>&1 || { echo "Missing FreeBSD arm64 artifact"; exit 1; }
             ls dist/udp-proxy-2020*-freebsd-armv7 >/dev/null 2>&1 || { echo "Missing FreeBSD armv7 artifact"; exit 1; }
-        # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
+
         - name: Upload files as artifact
+          # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
           uses: actions/upload-artifact@v7
           with:
             name: build-files-freebsd

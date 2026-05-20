@@ -28,7 +28,7 @@ LDFLAGS            += -X "main.CommitID=$(PROJECT_COMMIT)" -s -w
 OUTPUT_NAME        := $(DIST_DIR)$(PROJECT_NAME)-$(GOOS)-$(GOARCH)
 DOCKER_VERSION     ?= v$(PROJECT_VERSION)
 FREEBSD_VERSION    := 14.2
-FREEBSD_ARCHES     ?= amd64 arm64 arm7
+FREEBSD_ARCHES     ?= amd64 arm64 # armv7 disabled
 GOLANGCI_LINT_VERSION := 2.10.1
 
 ALL: $(OUTPUT_NAME)
@@ -199,17 +199,17 @@ freebsd-armv7: $(FREEBSD_ARMV7_S_NAME) ## no-help
 
 # configure our build flags for cross or native compiling for FreeBSD based on our current GOARCH
 ifeq ($(GOARCH),amd64)
-AMD64_CGO_LDFLAGS := "$$(pkg-config --libs libpcap)"
+AMD64_CGO_LDFLAGS := "$$(pkg-config --libs libpcap) -libverbs"
 AMD64_CGO_CFLAGS := "$$(pkg-config --cflags libpcap)"
 AMD64_CC := ""
-ARM64_CGO_LDFLAGS := "$$(pkg-config --libs libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/aarch64)"
+ARM64_CGO_LDFLAGS := "$$(pkg-config --libs libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/aarch64) -libverbs"
 ARM64_CGO_CFLAGS := "$$(pkg-config --cflags libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/aarch64)"
 ARM64_CC := /usr/local/freebsd-sysroot/aarch64/bin/cc
 else ifeq ($(GOARCH),arm64)
-ARM64_CGO_LDFLAGS := "$$(pkg-config --libs libpcap)"
+ARM64_CGO_LDFLAGS := "$$(pkg-config --libs libpcap) -libverbs"
 ARM64_CGO_CFLAGS := "$$(pkg-config --cflags libpcap)"
 ARM64_CC := ""
-AMD64_CGO_LDFLAGS := "$$(pkg-config --libs libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/amd64)"
+AMD64_CGO_LDFLAGS := "$$(pkg-config --libs libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/amd64) -libverbs"
 AMD64_CGO_CFLAGS := "$$(pkg-config --cflags libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/amd64)"
 AMD64_CC := /usr/local/freebsd-sysroot/amd64/bin/cc
 endif
@@ -219,7 +219,7 @@ $(FREEBSD_AMD64_S_NAME): $(wildcard */*.go)
 	CGO_LDFLAGS=$(AMD64_CGO_LDFLAGS) \
 	CGO_CFLAGS=$(AMD64_CGO_CFLAGS) \
 	CC=$(AMD64_CC) \
-	go build -ldflags '$(LDFLAGS) -linkmode external' \
+	go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 		-o $(FREEBSD_AMD64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(FREEBSD_AMD64_S_NAME)"
 
@@ -228,17 +228,19 @@ $(FREEBSD_ARM64_S_NAME): $(wildcard */*.go)
 	CGO_LDFLAGS=$(ARM64_CGO_LDFLAGS) \
 	CGO_CFLAGS=$(ARM64_CGO_CFLAGS) \
 	CC=$(ARM64_CC) \
-	go build -ldflags '$(LDFLAGS) -linkmode external' \
+	go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 		-o $(FREEBSD_ARM64_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(FREEBSD_ARM64_S_NAME)"
 
 
+# armv7 is disabled because i can't consistently build with the same flags when building 
+# on my ARM64 MAC vs. Ubuntu AMD64 image in Github... issue with -libverbs
 $(FREEBSD_ARMV7_S_NAME): $(wildcard */*.go)
 	GOOS=freebsd GOARCH=arm GOARM=7 CGO_ENABLED=1 \
-	CGO_LDFLAGS="$$(pkg-config --libs libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/arm7)" \
+	CGO_LDFLAGS="$$(pkg-config --libs libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/arm7) -libverbs" \
 	CGO_CFLAGS="$$(pkg-config --cflags libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/arm7)" \
 	CC=/usr/local/freebsd-sysroot/armv7/bin/cc \
-	go build -ldflags '$(LDFLAGS) -linkmode external' \
+	go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 		-o $(FREEBSD_ARMV7_S_NAME) ./cmd/udp-proxy-2020/...
 	@echo "Created: $(FREEBSD_ARMV7_S_NAME)"
 endif
