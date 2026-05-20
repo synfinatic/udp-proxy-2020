@@ -3,11 +3,11 @@ Vagrant.configure("2") do |config|
   config.vm.guest = :freebsd
   config.ssh.shell = "sh"
   config.vm.provision "shell", inline: <<-SHELL
-    pkg install -y wget bash git gmake go libpcap pkgconf \
+    pkg install -y wget bash git gmake go libpcap pkgconf pcre2\
       aarch64-binutils arm-gnueabi-binutils amd64-binutils \
       aarch64-freebsd-sysroot amd64-freebsd-sysroot armv7-freebsd-sysroot 
-
   SHELL
+
   # have to rsync our code over to build
   config.vm.synced_folder ".", "/home/vagrant/udp-proxy-2020", create: true, disabled: false, id: 'source-code', type: "rsync"
   config.vm.provider :virtualbox do |vb|
@@ -17,6 +17,7 @@ Vagrant.configure("2") do |config|
     vb.cpus = 2
     vb.memory = 1024
   end
+
   # build the code.  we scp it back onto the host via our Makefile
   config.trigger.after :up do |trigger|
     trigger.info = "building FreeBSD binaries..."
