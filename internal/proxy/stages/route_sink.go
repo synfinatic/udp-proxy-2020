@@ -41,7 +41,7 @@ func (s *RouteSink) Write(pkt *proxy.Packet) error {
 
 	targets := s.targetsForPacket(pkt)
 	if len(targets) == 0 {
-		slog.Warn("Unable to route packet, dropping", "interface", s.Iname)
+		slog.Debug("0 targets on interface to forward packet, dropping", "interface", s.Iname)
 		return nil
 	}
 
