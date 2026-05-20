@@ -1,16 +1,14 @@
 module github.com/synfinatic/udp-proxy-2020
 
-go 1.24.7
+go 1.26
+
+toolchain go1.26.3
 
 require (
 	github.com/alecthomas/kong v1.15.0
-	github.com/davecgh/go-spew v1.1.1
 	github.com/gopacket/gopacket v1.5.0
-	github.com/sirupsen/logrus v1.9.4
 	golang.org/x/net v0.39.0 // indirect; security
 )
-
-require github.com/ccoveille/go-safecast v1.8.2
 
 require golang.org/x/sys v0.32.0 // indirect
 

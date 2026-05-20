@@ -1,11 +1,15 @@
 name: Build Binaries
 
-on: [pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
+  release:
+    types: [created]
 
 env:
-  GO_VERSION: '${{ vars.GO_VERSION }}'
   LIBPCAP_VERSION: 1.10.3
-  FREEBSD_VERSION: 14.3
+  FREEBSD_VERSION: 14.2
 
 jobs:
   linux-arm32:
@@ -33,7 +37,7 @@ jobs:
         - name: Install Go
           uses: actions/setup-go@v6
           with:
-            go-version: '${{ env.GO_VERSION }}'
+            go-version-file: 'go.mod'
 
         - name: Prepare Libpcap build environment
           run: |
@@ -92,7 +96,8 @@ jobs:
     runs-on: ubuntu-24.04-arm
 
     steps:
-        - uses: actions/checkout@v6
+        - name: Checkout code
+          uses: actions/checkout@v6
 
         - name: Install dependencies
           run: |
@@ -137,7 +142,7 @@ jobs:
         - name: Install Go
           uses: actions/setup-go@v6
           with:
-            go-version: '${{ env.GO_VERSION }}'
+            go-version-file: 'go.mod'
 
         - name: Prepare Libpcap build environment
           run: |
@@ -191,7 +196,7 @@ jobs:
         - name: Install Go
           uses: actions/setup-go@v6
           with:
-            go-version: '${{ env.GO_VERSION }}'
+            go-version-file: 'go.mod'
 
         - name: Prepare Libpcap build environment
           run: |
@@ -226,12 +231,13 @@ jobs:
     runs-on: macos-latest
 
     steps:
-        - uses: actions/checkout@v6
+        - name: Checkout code
+          uses: actions/checkout@v6
 
         - name: Install Go
           uses: actions/setup-go@v6
           with:
-            go-version: '${{ env.GO_VERSION }}'
+            go-version-file: 'go.mod'
 
         - name: Install dependencies
           run: |
@@ -266,29 +272,105 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-        - uses: actions/checkout@v6
+        - name: Checkout code
+          uses: actions/checkout@v6
+
+        - name: Get FreeBSD Archs
+          run: echo "FREEBSD_ARCHES=$(make .print-freebsd-archs)" >> $GITHUB_ENV
 
         - name: Build in FreeBSD
           # https://github.com/marketplace/actions/freebsd-vm 
           uses: vmactions/freebsd-vm@v1
           with:
+            disable-cache: true
             release: '${{ env.FREEBSD_VERSION }}'
             usesh: true
             prepare: |
-                pkg install -y git wget bash gmake go libpcap aarch64-gcc13 \
-                aarch64-binutils arm-gnueabi-binutils amd64-binutils \
-                armv7-freebsd-sysroot aarch64-freebsd-sysroot llvm15
+                pkg install -y wget bash git gmake go libpcap pkgconf pcre2 \
+                  aarch64-binutils arm-gnueabi-binutils amd64-binutils \
+                  aarch64-freebsd-sysroot amd64-freebsd-sysroot armv7-freebsd-sysroot 
             run: |
-                ls -l /usr/local/bin
-                export PATH=/usr/local/bin:$PATH
                 go version
                 # fix for "fatal: detected dubious ownership in repository"
                 git config --global --add safe.directory /home/runner/work/udp-proxy-2020/udp-proxy-2020
-                FREEBSD_VERSION=${{ env.FREEBSD_VERSION }} gmake freebsd-binaries
+                FREEBSD_VERSION=${{ env.FREEBSD_VERSION }} gmake FREEBSD_ARCHES="${{ env.FREEBSD_ARCHES }}" freebsd-binaries
 
-        # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
+        - name: Verify FreeBSD artifacts
+          run: |
+            ls -l dist/udp-proxy-2020*-freebsd-* || true
+            for arch in ${{ env.FREEBSD_ARCHES }}; do
+              if ! ls dist/udp-proxy-2020*-freebsd-$arch >/dev/null 2>&1; then
+                echo "Missing FreeBSD $arch artifact"
+                exit 1
+              fi
+            done
+
         - name: Upload files as artifact
+          # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
           uses: actions/upload-artifact@v7
           with:
             name: build-files-freebsd
             path: dist/udp-proxy-2020*
+  sign-and-upload-files:
+    name: Sign and upload binary files
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+
+    # Wait for binary files to be built
+    needs: [linux-arm32, linux-aarch64, linux-amd64, linux-mips64, macos, freebsd]
+
+    steps:
+      - name: Download binaries linux-arm32
+        uses: actions/download-artifact@v6
+        with:
+          name: build-files-linux-arm32
+          path: dist/
+
+      - name: Download binaries linux-aarch64
+        uses: actions/download-artifact@v6
+        with:
+          name: build-files-linux-aarch64
+          path: dist/
+
+      - name: Download binaries linux-amd64
+        uses: actions/download-artifact@v6
+        with:
+          name: build-files-linux-amd64
+          path: dist/
+
+      - name: Download binaries linux-mips64
+        uses: actions/download-artifact@v6
+        with:
+          name: build-files-linux-mips64
+          path: dist/
+
+      - name: Download binaries macos
+        uses: actions/download-artifact@v6
+        with:
+          name: build-files-macos
+          path: dist/
+
+      - name: Download binaries freebsd
+        uses: actions/download-artifact@v6
+        with:
+          name: build-files-freebsd
+          path: dist/
+
+#      # Source: https://github.com/crazy-max/ghaction-import-gpg
+#      - name: Import GPG key
+#        uses: crazy-max/ghaction-import-gpg@v6.3.0
+#        with:
+#          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+#          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+#
+#      - name: Create signature file
+#        run: |
+#          shasum -a 256 dist/* | gpg --clear-sign > dist/release.sig.asc
+
+      # Source: https://github.com/svenstaro/upload-release-action
+      - name: Upload all files to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          file: dist/*
+          overwrite: true
+          file_glob: true

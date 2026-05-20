@@ -104,6 +104,9 @@ Advanced options:
    don't have a fixed ip.
 * `--no-listen` -- Do not listen on the specified UDP port(s) to avoid conflicts
 * `--deliver-local` -- Deliver packets locally on loopback interface
+* `--graph-pipeline` -- Generate a Graphviz dot file at the specified path containing a visualization
+   of the pipeline architecture. When used, requires `--interface` (2 or more) and `--port` to be specified,
+   and will exit after generating the file. Use with `dot -Tpng out.dot -o out.png` to create a PNG image.
 
 There are other flags of course, run `./udp-proxy-2020 --help` for a full list.
 
@@ -162,6 +165,9 @@ options so that it delivers packets via the loopback interface.
 These flags are for debugging problems with `udp-proxy-2020`.  You should
 use these flags when I direct you to do so as part of a [ticket](
 https://github.com/synfinatic/udp-proxy-2020/issues) you have opened for `udp-proxy-2020`.
+
+If you need to inspect live packets without opening a capture file, use
+`--decode` to print a one-line decode of each forwarded packet to stdout.
 
 ### Where can I download precompiled binaries?
 
