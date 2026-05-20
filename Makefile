@@ -83,11 +83,24 @@ vet: ## Run `go vet` on the code
 	@echo checking code is vetted...
 	go vet $(shell go list ./...)
 
+lint-install:  ## Install golangci-lint
+	curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $(shell go env GOPATH)/bin v$(GOLANGCI_LINT_VERSION)
+
+.PHONY: .print-golangci-lint-version
+.print-golangci-lint-version:  ## Print golangci-lint version
+	@echo v$(GOLANGCI_LINT_VERSION)
+
+.PHONY: .lint-check
+.lint-check:
+	@if test $$(golangci-lint --version 2>&1 | grep -c "version $(GOLANGCI_LINT_VERSION)") -eq 0 ; then \
+		echo "Need to install golangci-lint $(GOLANGCI_LINT_VERSION)" ; \
+		echo "Run: make lint-install" ; \
+		exit -1 ; \
+	fi
+
 .PHONY: golangci-lint
-golangci-lint: ## Run golangci-lint on the code
-	@echo checking code with golangci-lint v$(GOLANGCI_LINT_VERSION)...
-	@which golangci-lint >/dev/null 2>&1 || { echo "Please install golangci-lint: https://golangci-lint.run/usage/install/" >&2; exit 1; }
-	@golangci-lint run
+golangci-lint: .lint-check ## Run golangci-lint on the code
+	golangci-lint run
 
 test: $(OUTPUT_NAME) vet unittest golangci-lint ## Run all tests
 
@@ -384,6 +397,6 @@ package: .linux-amd64  ## Build deb/rpm packages
 		-v $$(pwd)/dist:/root/dist \
 		-e VERSION=$(PROJECT_VERSION) udp-proxy-2020-builder:latest
 
-.PHONY: .print-golangci-lint-version
-.print-golangci-lint-version:
-	@echo v$(GOLANGCI_LINT_VERSION)
+.PHONY: .print-freebsd-archs
+.print-freebsd-archs:  ## Print the FreeBSD arches we are building for
+	@echo $(FREEBSD_ARCHES)

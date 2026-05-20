@@ -275,6 +275,9 @@ jobs:
         - name: Checkout code
           uses: actions/checkout@v6
 
+        - name: Get FreeBSD Archs
+          run: echo "FREEBSD_ARCHES=$(make .print-freebsd-archs)" >> $GITHUB_ENV
+
         - name: Build in FreeBSD
           # https://github.com/marketplace/actions/freebsd-vm 
           uses: vmactions/freebsd-vm@v1
@@ -290,14 +293,17 @@ jobs:
                 go version
                 # fix for "fatal: detected dubious ownership in repository"
                 git config --global --add safe.directory /home/runner/work/udp-proxy-2020/udp-proxy-2020
-                FREEBSD_VERSION=${{ env.FREEBSD_VERSION }} gmake FREEBSD_ARCHES="amd64 arm64 armv7" freebsd-binaries
+                FREEBSD_VERSION=${{ env.FREEBSD_VERSION }} gmake FREEBSD_ARCHES="${{ env.FREEBSD_ARCHES }}" freebsd-binaries
 
         - name: Verify FreeBSD artifacts
           run: |
             ls -l dist/udp-proxy-2020*-freebsd-* || true
-            ls dist/udp-proxy-2020*-freebsd-amd64 >/dev/null 2>&1 || { echo "Missing FreeBSD amd64 artifact"; exit 1; }
-            ls dist/udp-proxy-2020*-freebsd-arm64 >/dev/null 2>&1 || { echo "Missing FreeBSD arm64 artifact"; exit 1; }
-            ls dist/udp-proxy-2020*-freebsd-armv7 >/dev/null 2>&1 || { echo "Missing FreeBSD armv7 artifact"; exit 1; }
+            for arch in ${{ env.FREEBSD_ARCHES }}; do
+              if ! ls dist/udp-proxy-2020*-freebsd-$arch >/dev/null 2>&1; then
+                echo "Missing FreeBSD $arch artifact"
+                exit 1
+              fi
+            done
 
         - name: Upload files as artifact
           # Artifacts docs: https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts
