@@ -11,11 +11,11 @@ PROJECT_TAG        := $(shell git describe --tags 2>/dev/null $(git rev-list --t
 ifeq ($(PROJECT_TAG),)
 PROJECT_TAG        := NO-TAG
 endif
-PROJECT_COMMIT     := $(shell git rev-parse HEAD)
+PROJECT_COMMIT     := $(shell git rev-parse HEAD 2>/dev/null)
 ifeq ($(PROJECT_COMMIT),)
 PROJECT_COMMIT     := NO-CommitID
 endif
-PROJECT_DELTA      := $(shell DELTA_LINES=$$(git diff | wc -l); if [ $${DELTA_LINES} -ne 0 ]; then echo $${DELTA_LINES} ; else echo "''" ; fi)
+PROJECT_DELTA      := $(shell DELTA_LINES=$$(git diff 2>/dev/null | wc -l); if [ $${DELTA_LINES} -ne 0 ]; then echo $${DELTA_LINES} ; else echo "''" ; fi)
 VERSION_PKG        := $(shell echo $(PROJECT_VERSION) | sed 's/^v//g')
 LICENSE            := GPLv3
 URL                := https://github.com/$(DOCKER_REPO)/$(PROJECT_NAME)
@@ -165,7 +165,7 @@ $(LINUX_AMD64_S_NAME): .prepare
 	@echo "Created: $(LINUX_AMD64_S_NAME)"
 
 ######################################################################
-# Vagrant targets for building for FreeBSD/pfSense
+# Vagrant targets for building for FreeBSD
 ######################################################################
 .vagrant-check:
 	@which vagrant >/dev/null || { echo "Please install Vagrant: https://www.vagrantup.com"; exit 1; }
@@ -175,13 +175,48 @@ $(LINUX_AMD64_S_NAME): .prepare
 		fi
 	@touch .vagrant-check
 
-.vagrant-provision: Vagrantfile .vagrant-check
-	vagrant provision && touch .vagrant-provision
-
-freebsd: .vagrant-provision ## Build all FreeBSD binaries using Vagrant VM (set VAGRANT_DEFAULT_PROVIDER on Apple Silicon)
-	@echo "Run `vagrant provision` to reprovision the VM if you have made changes to the Vagrantfile or provisioning scripts."
-	vagrant up && vagrant ssh-config >.vagrant-ssh && \
-		scp -F .vagrant-ssh default:$(PROJECT_NAME)/dist/*freebsd* dist/
+freebsd: .vagrant-check ## Build all FreeBSD binaries using Vagrant
+	@echo 'Run `vagrant provision` to reprovision the VM if you have made changes to the Vagrantfile or provisioning scripts.'
+	@set -e; \
+		mtime() { stat -f %m "$$1" 2>/dev/null || stat -c %Y "$$1"; }; \
+		src_latest=$$( ( \
+			find cmd internal -type f -name '*.go'; \
+			printf '%s\n' go.mod go.sum Makefile Vagrantfile \
+		) | while read -r f; do \
+			test -f "$$f" && mtime "$$f"; \
+		done | sort -nr | head -1); \
+		test -n "$$src_latest" || src_latest=0; \
+		arches=$$(echo "$(FREEBSD_ARCHES)" | sed -e 's/aarch64/arm64/g'); \
+		needs_build=0; \
+		for arch in $$arches; do \
+			artifact="dist/$(PROJECT_NAME)-$(PROJECT_VERSION)-freebsd-$$arch"; \
+			if test ! -f "$$artifact"; then \
+				echo "Missing artifact: $$artifact"; \
+				needs_build=1; \
+				break; \
+			fi; \
+			artifact_mtime=$$(mtime "$$artifact"); \
+			if test "$$artifact_mtime" -lt "$$src_latest"; then \
+				echo "Stale artifact: $$artifact"; \
+				needs_build=1; \
+				break; \
+			fi; \
+		done; \
+		if test "$$needs_build" -eq 0; then \
+			echo "FreeBSD artifacts are up-to-date for arches: $$arches"; \
+			echo "Skipping Vagrant build"; \
+		else \
+			vm_state=$$(vagrant status --machine-readable | awk -F, '$$3=="state" {print $$4; exit}'); \
+			if test "$$vm_state" = "not_created"; then \
+				FREEBSD_ARCHES="$(FREEBSD_ARCHES)" FREEBSD_SKIP_TRIGGER_BUILD=1 vagrant up; \
+			else \
+				FREEBSD_ARCHES="$(FREEBSD_ARCHES)" FREEBSD_SKIP_TRIGGER_BUILD=1 vagrant up --no-provision; \
+			fi; \
+			vagrant rsync; \
+			vagrant ssh -c 'sh -c "PATH=/usr/local/bin:$${PATH}; cd $(PROJECT_NAME); find cmd internal -type f -name '\''*.go'\'' -exec touch {} +; touch go.mod go.sum Makefile Vagrantfile 2>/dev/null || true; gmake --no-silent -B FREEBSD_ARCHES=\"$(FREEBSD_ARCHES)\" freebsd-binaries"'; \
+			vagrant ssh-config >.vagrant-ssh; \
+			scp -F .vagrant-ssh default:$(PROJECT_NAME)/dist/*freebsd* dist/; \
+		fi
 
 freebsd-shell: ## Get a shell in FreeBSD Vagrant VM
 	vagrant ssh
