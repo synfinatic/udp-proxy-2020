@@ -100,7 +100,7 @@ func PacketForEgress(pkt *proxy.Packet, opts Options) (*proxy.Packet, error) {
 		layersToSerialize = append(layersToSerialize, eth)
 	case layers.LinkTypeNull, layers.LinkTypeLoop:
 		layersToSerialize = append(layersToSerialize, &layers.Loopback{Family: layers.ProtocolFamilyIPv4})
-	case layers.LinkTypeRaw:
+	case layers.LinkTypeRaw, proxy.LinkTypeRawOpenBSD, proxy.LinkTypeRawOthers:
 		// No L2 header.
 	default:
 		return nil, fmt.Errorf("unsupported egress link type: %v", opts.EgressLinkType)
@@ -132,7 +132,7 @@ func packetFromLinkType(raw []byte, linkType layers.LinkType) gopacket.Packet {
 		return gopacket.NewPacket(raw, layers.LayerTypeLoopback, gopacket.Default)
 	case layers.LinkTypeEthernet:
 		return gopacket.NewPacket(raw, layers.LayerTypeEthernet, gopacket.Default)
-	case layers.LinkTypeRaw:
+	case layers.LinkTypeRaw, proxy.LinkTypeRawOpenBSD, proxy.LinkTypeRawOthers:
 		return gopacket.NewPacket(raw, layers.LayerTypeIPv4, gopacket.Default)
 	default:
 		return gopacket.NewPacket(raw, gopacket.LayerTypePayload, gopacket.Default)

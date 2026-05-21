@@ -2,8 +2,10 @@ package proxy
 
 import (
 	"net"
+	"runtime"
 	"testing"
 
+	"github.com/gopacket/gopacket/layers"
 	"github.com/gopacket/gopacket/pcap"
 )
 
@@ -55,5 +57,39 @@ func TestDeviceManager_GetAddresses(t *testing.T) {
 	_, err = dm.GetAddresses("nonexistent")
 	if err == nil {
 		t.Error("Expected error for nonexistent interface")
+	}
+}
+
+func TestDeviceManager_isValidLinkType(t *testing.T) {
+	dm := &DeviceManager{}
+
+	alwaysValid := []layers.LinkType{
+		layers.LinkTypeLoop,
+		layers.LinkTypeEthernet,
+		layers.LinkTypeNull,
+		layers.LinkTypeRaw,
+	}
+	for _, lt := range alwaysValid {
+		if !dm.isValidLinkType(lt) {
+			t.Errorf("expected link type %v to be valid on all platforms", lt)
+		}
+	}
+
+	if dm.isValidLinkType(layers.LinkType(255)) {
+		t.Error("expected unknown link type 255 to be invalid")
+	}
+
+	// LinkTypeRawOpenBSD is only valid on OpenBSD.
+	gotOpenBSD := dm.isValidLinkType(LinkTypeRawOpenBSD)
+	wantOpenBSD := runtime.GOOS == "openbsd"
+	if gotOpenBSD != wantOpenBSD {
+		t.Errorf("isValidLinkType(LinkTypeRawOpenBSD) = %v, want %v (GOOS=%s)", gotOpenBSD, wantOpenBSD, runtime.GOOS)
+	}
+
+	// LinkTypeRawOthers is valid on every OS except OpenBSD.
+	gotOthers := dm.isValidLinkType(LinkTypeRawOthers)
+	wantOthers := runtime.GOOS != "openbsd"
+	if gotOthers != wantOthers {
+		t.Errorf("isValidLinkType(LinkTypeRawOthers) = %v, want %v (GOOS=%s)", gotOthers, wantOthers, runtime.GOOS)
 	}
 }
