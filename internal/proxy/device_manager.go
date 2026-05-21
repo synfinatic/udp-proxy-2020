@@ -207,7 +207,31 @@ func (dm *DeviceManager) CreateWriterHandle(iname string) (*pcap.Handle, error) 
 		return handle, nil
 	}
 	dm.mu.RUnlock()
-	slog.Debug("Creating writer handle for interface", slog.String("interface", iname))
+	handle, err := dm.newWriterHandle(iname, false)
+	if err != nil {
+		return nil, err
+	}
+
+	dm.mu.Lock()
+	dm.handles[key] = handle
+	dm.mu.Unlock()
+
+	return handle, nil
+}
+
+// CreateIsolatedWriterHandle initializes a dedicated libpcap writer handle for
+// the given interface without storing it in the shared handle cache. This is
+// used when each caller must own and close its own handle independently.
+func (dm *DeviceManager) CreateIsolatedWriterHandle(iname string) (*pcap.Handle, error) {
+	return dm.newWriterHandle(iname, true)
+}
+
+func (dm *DeviceManager) newWriterHandle(iname string, isolated bool) (*pcap.Handle, error) {
+	if isolated {
+		slog.Debug("Creating isolated writer handle for interface", slog.String("interface", iname))
+	} else {
+		slog.Debug("Creating writer handle for interface", slog.String("interface", iname))
+	}
 
 	inactive, err := pcap.NewInactiveHandle(iname)
 	if err != nil {
@@ -232,11 +256,17 @@ func (dm *DeviceManager) CreateWriterHandle(iname string) (*pcap.Handle, error) 
 		return nil, fmt.Errorf("interface %s has an unsupported link type: %s", iname, handle.LinkType())
 	}
 
-	dm.mu.Lock()
-	dm.handles[key] = handle
-	dm.mu.Unlock()
-
 	return handle, nil
+}
+
+// InterfaceAvailable refreshes the interface list and reports whether iname is
+// currently present and has at least one address.
+func (dm *DeviceManager) InterfaceAvailable(iname string) bool {
+	_ = dm.Refresh() // best-effort; ignore transient errors
+	dm.mu.RLock()
+	defer dm.mu.RUnlock()
+	_, ok := dm.interfaces[iname]
+	return ok
 }
 
 func (dm *DeviceManager) Close(iname string, direction PcapHandleDirection) error {
