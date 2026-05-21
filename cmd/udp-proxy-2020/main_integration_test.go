@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"errors"
+	"net"
 	"testing"
 	"time"
 
+	"github.com/gopacket/gopacket"
+	"github.com/gopacket/gopacket/layers"
 	"github.com/synfinatic/udp-proxy-2020/internal/proxy"
 	"github.com/synfinatic/udp-proxy-2020/internal/proxy/stages"
 )
@@ -29,6 +32,13 @@ func (s *testSource) Name() string {
 type taggedSink struct {
 	target string
 }
+
+type integrationWriter struct {
+	linkType layers.LinkType
+}
+
+func (w *integrationWriter) WritePacketData(_ []byte) error { return nil }
+func (w *integrationWriter) LinkType() layers.LinkType      { return w.linkType }
 
 func (s *taggedSink) Name() string {
 	return "taggedSink(" + s.target + ")"
@@ -142,5 +152,84 @@ func TestBuildSharedRegistries_UsesSingleSharedRegistry(t *testing.T) {
 	}
 	if registries[0] != returned {
 		t.Fatal("expected returned registry to be the shared instance from constructor")
+	}
+}
+
+func TestSetupCrossInterfaceSink_UsesStableLinkTypeAndSurvivesWriterLoss(t *testing.T) {
+	origFactory := newTransmitterSink
+	defer func() {
+		newTransmitterSink = origFactory
+	}()
+
+	newTransmitterSink = func(_ *proxy.DeviceManager, iname string) (*stages.TransmitterSink, error) {
+		return &stages.TransmitterSink{
+			Writer: &integrationWriter{linkType: layers.LinkTypeEthernet},
+			Iname:  iname,
+		}, nil
+	}
+
+	registry, err := stages.NewRegistryProcessorByInterface(time.Hour, nil)
+	if err != nil {
+		t.Fatalf("NewRegistryProcessorByInterface failed: %v", err)
+	}
+
+	src := ifaceState{
+		name:     "eth0",
+		pipeline: proxy.NewPipeline(&testSource{name: "src:eth0"}),
+	}
+	dst := ifaceState{
+		name:      "wg0",
+		netif:     &net.Interface{HardwareAddr: net.HardwareAddr{0, 1, 2, 3, 4, 5}},
+		broadcast: true,
+		bcastIP:   net.IP{10, 10, 10, 255},
+	}
+
+	if err := setupCrossInterfaceSink(CLI{}, &proxy.DeviceManager{}, registry, src, dst); err != nil {
+		t.Fatalf("setupCrossInterfaceSink failed: %v", err)
+	}
+
+	if len(src.pipeline.Sinks) != 1 {
+		t.Fatalf("expected exactly one sink on source pipeline, got %d", len(src.pipeline.Sinks))
+	}
+
+	route, ok := src.pipeline.Sinks[0].(*stages.RouteSink)
+	if !ok {
+		t.Fatalf("expected RouteSink, got %T", src.pipeline.Sinks[0])
+	}
+	if route.LinkType != layers.LinkTypeEthernet {
+		t.Fatalf("expected stable route link type Ethernet, got %v", route.LinkType)
+	}
+
+	if len(route.Sinks) != 1 {
+		t.Fatalf("expected route sink fanout to contain one sink, got %d", len(route.Sinks))
+	}
+	tx, ok := route.Sinks[0].(*stages.TransmitterSink)
+	if !ok {
+		t.Fatalf("expected transmitter sink, got %T", route.Sinks[0])
+	}
+
+	// Simulate reconnect/drop mode after interface loss.
+	tx.Writer = nil
+
+	raw := []byte{
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+		0x08, 0x00,
+		0x45, 0x00, 0x00, 0x1c,
+		0x00, 0x00, 0x40, 0x00,
+		0x40, 0x11, 0x00, 0x00,
+		0x0a, 0x00, 0x00, 0x01,
+		0x0a, 0x00, 0x00, 0x02,
+		0x04, 0xd2, 0x04, 0xd2,
+		0x00, 0x08, 0x00, 0x00,
+	}
+	pkt := &proxy.Packet{
+		Raw:              raw,
+		Packet:           gopacket.NewPacket(raw, layers.LayerTypeEthernet, gopacket.Default),
+		ArrivalInterface: "eth0",
+	}
+
+	if err := route.Write(pkt); err != nil {
+		t.Fatalf("route write should remain non-fatal while writer is unavailable: %v", err)
 	}
 }

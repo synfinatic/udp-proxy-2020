@@ -1,6 +1,7 @@
 package stages
 
 import (
+	"context"
 	"errors"
 	"net"
 	"testing"
@@ -10,13 +11,6 @@ import (
 	"github.com/gopacket/gopacket/layers"
 	"github.com/synfinatic/udp-proxy-2020/internal/proxy"
 )
-
-type routeSinkMockWriter struct {
-	linkType layers.LinkType
-}
-
-func (m *routeSinkMockWriter) WritePacketData(_ []byte) error { return nil }
-func (m *routeSinkMockWriter) LinkType() layers.LinkType      { return m.linkType }
 
 type routeSinkTestSink struct {
 	writes int
@@ -199,7 +193,7 @@ func TestRouteSink_Write_FansOutToTargetsAndSinks(t *testing.T) {
 		BroadcastAddress: net.IP{10, 0, 1, 255},
 		HardwareAddr:     net.HardwareAddr{0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc},
 		Registry:         registry,
-		LinkType:         &routeSinkMockWriter{linkType: layers.LinkTypeEthernet},
+		LinkType:         layers.LinkTypeEthernet,
 		Processors:       []proxy.Processor{proc},
 		Sinks:            []proxy.Sink{sinkA, sinkB},
 	}
@@ -250,7 +244,7 @@ func TestRouteSink_Write_DropsWhenProcessorReturnsFalse(t *testing.T) {
 		Broadcast:        true,
 		BroadcastAddress: net.IP{10, 0, 2, 255},
 		HardwareAddr:     net.HardwareAddr{0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc},
-		LinkType:         &routeSinkMockWriter{linkType: layers.LinkTypeEthernet},
+		LinkType:         layers.LinkTypeEthernet,
 		Processors:       []proxy.Processor{proc},
 		Sinks:            []proxy.Sink{capture},
 	}
@@ -285,7 +279,7 @@ func TestRouteSink_Write_SkipsSinkWhenProcessorErrors(t *testing.T) {
 		Broadcast:        true,
 		BroadcastAddress: net.IP{10, 0, 3, 255},
 		HardwareAddr:     net.HardwareAddr{0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc},
-		LinkType:         &routeSinkMockWriter{linkType: layers.LinkTypeEthernet},
+		LinkType:         layers.LinkTypeEthernet,
 		Processors:       []proxy.Processor{proc},
 		Sinks:            []proxy.Sink{capture},
 	}
@@ -326,7 +320,7 @@ func TestRouteSink_Write_RewriteErrorSkipsTarget(t *testing.T) {
 		Broadcast:    false,
 		HardwareAddr: net.HardwareAddr{0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc},
 		Registry:     registry,
-		LinkType:     &routeSinkMockWriter{linkType: layers.LinkTypeEthernet},
+		LinkType:     layers.LinkTypeEthernet,
 		Sinks:        []proxy.Sink{capture},
 	}
 
@@ -362,5 +356,60 @@ func TestRouteSink_Close_ReturnsFirstErrorAndClosesAll(t *testing.T) {
 	}
 	if sinkA.closed != 1 || sinkB.closed != 1 {
 		t.Fatalf("expected all sinks to be closed once: sinkA=%d sinkB=%d", sinkA.closed, sinkB.closed)
+	}
+}
+
+// Integration-style regression test: RouteSink should keep rewriting safely
+// while TransmitterSink is in reconnect mode after write failures.
+func TestRouteSink_WithTransmitterReconnect_DoesNotPanic(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tx := &TransmitterSink{
+		dm:     &proxy.DeviceManager{},
+		Writer: &mockWriter{linkType: layers.LinkTypeEthernet, writeErr: errors.New("send: Device not configured")},
+		Iname:  "wg0",
+		ctx:    ctx,
+		cancel: cancel,
+	}
+
+	route := &RouteSink{
+		Iname:            "wg0",
+		Broadcast:        true,
+		BroadcastAddress: net.IP{10, 7, 0, 255},
+		HardwareAddr:     net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff},
+		LinkType:         layers.LinkTypeEthernet,
+		Sinks:            []proxy.Sink{tx},
+	}
+
+	pkt := buildEthernetPacket(
+		t,
+		net.IP{10, 0, 0, 1},
+		net.IP{10, 0, 0, 2},
+		net.HardwareAddr{0, 1, 2, 3, 4, 5},
+		net.HardwareAddr{6, 7, 8, 9, 10, 11},
+		[]byte("hello"),
+		"eth-in",
+	)
+
+	if err := route.Write(pkt); err != nil {
+		t.Fatalf("first route write failed: %v", err)
+	}
+
+	tx.mu.Lock()
+	if !tx.reconnecting {
+		tx.mu.Unlock()
+		t.Fatal("expected transmitter to enter reconnecting state after write error")
+	}
+	if tx.Writer != nil {
+		tx.mu.Unlock()
+		t.Fatal("expected writer to be nil while reconnecting")
+	}
+	tx.mu.Unlock()
+
+	// Second write should still succeed from RouteSink's perspective while
+	// transmitter reconnect is in progress (packet is dropped gracefully).
+	if err := route.Write(pkt); err != nil {
+		t.Fatalf("second route write failed while reconnecting: %v", err)
 	}
 }
