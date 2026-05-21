@@ -13,7 +13,6 @@ import (
 const (
 	reconnectInitialDelay = 1 * time.Second
 	reconnectMaxDelay     = 30 * time.Second
-	interfacePollInterval = 1 * time.Second
 )
 
 // PcapSource reads packets from a libpcap handle.
@@ -30,6 +29,8 @@ type PcapSource struct {
 	closeReaderHandle  func(iname string, direction proxy.PcapHandleDirection) error
 	interfaceAvailable func(iname string) bool
 	newPacketSource    func(handle *pcap.Handle) (*gopacket.PacketSource, chan gopacket.Packet)
+	reconnectSignal    chan struct{}
+	monitorCancel      context.CancelFunc
 }
 
 // NewPcapSource creates a new PcapSource.
@@ -39,7 +40,7 @@ func NewPcapSource(dm *proxy.DeviceManager, iname string, promisc bool, timeout 
 		return nil, err
 	}
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-	return &PcapSource{
+	source := &PcapSource{
 		dm:                 dm,
 		handle:             handle,
 		packetSource:       packetSource,
@@ -54,7 +55,53 @@ func NewPcapSource(dm *proxy.DeviceManager, iname string, promisc bool, timeout 
 			ps := gopacket.NewPacketSource(h, h.LinkType())
 			return ps, ps.Packets()
 		},
-	}, nil
+		reconnectSignal: make(chan struct{}, 1),
+		monitorCancel:   nil,
+	}
+	source.startInterfaceMonitor()
+	return source, nil
+}
+
+func (s *PcapSource) startInterfaceMonitor() {
+	if s.interfaceAvailable == nil {
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	s.monitorCancel = cancel
+
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+
+		interfaceWasDown := false
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				available := s.interfaceAvailable(s.iname)
+				if !available {
+					if !interfaceWasDown {
+						slog.Warn("interface appears down, awaiting recovery",
+							slog.String("interface", s.iname))
+					}
+					interfaceWasDown = true
+					continue
+				}
+
+				if interfaceWasDown {
+					slog.Info("interface is back, reconnecting capture handle",
+						slog.String("interface", s.iname))
+					select {
+					case s.reconnectSignal <- struct{}{}:
+					default:
+					}
+					interfaceWasDown = false
+				}
+			}
+		}
+	}()
 }
 
 func (s *PcapSource) Handle() *pcap.Handle {
@@ -107,45 +154,27 @@ func (s *PcapSource) reconnect(ctx context.Context, reason string) error {
 	}
 }
 
-// Read reads the next packet from the PCAP handle. If the underlying interface
-// disappears (e.g. VPN tunnel restart), Read blocks and retries until the
-// interface comes back or ctx is cancelled.
+// Read reads the next packet from the PCAP handle. If the packet channel is
+// closed because the interface/handle disappeared, it reconnects until the
+// handle is restored or ctx is cancelled.
 func (s *PcapSource) Read(ctx context.Context) (*proxy.Packet, error) {
-	ticker := time.NewTicker(interfacePollInterval)
-	defer ticker.Stop()
-
-	interfaceWasDown := false
+	reconnectSignal := s.reconnectSignal
 
 	for {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-ticker.C:
-			available := s.interfaceAvailable(s.iname)
-			if !available {
-				if !interfaceWasDown {
-					slog.Warn("interface appears down, awaiting recovery",
-						slog.String("interface", s.iname))
-				}
-				interfaceWasDown = true
-				continue
+		case <-reconnectSignal:
+			if err := s.reconnect(ctx, "interface_down_up"); err != nil {
+				return nil, err
 			}
-
-			if interfaceWasDown {
-				slog.Info("interface is back, reconnecting capture handle",
-					slog.String("interface", s.iname))
-				if err := s.reconnect(ctx, "interface_down_up"); err != nil {
-					return nil, err
-				}
-				interfaceWasDown = false
-			}
+			continue
 		case p, ok := <-s.packets:
 			if !ok {
 				// Interface went away — attempt to reconnect.
 				if err := s.reconnect(ctx, "packets_channel_closed"); err != nil {
 					return nil, err
 				}
-				interfaceWasDown = false
 				// Restart the select with the new packets channel.
 				continue
 			}
@@ -162,6 +191,9 @@ func (s *PcapSource) Read(ctx context.Context) (*proxy.Packet, error) {
 
 // Close closes the underlying PCAP handle
 func (s *PcapSource) Close() error {
+	if s.monitorCancel != nil {
+		s.monitorCancel()
+	}
 	return s.dm.Close(s.iname, proxy.Reader)
 }
 
