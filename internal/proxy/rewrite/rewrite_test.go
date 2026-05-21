@@ -273,3 +273,51 @@ func TestPacketForEgress_UnknownMACWithoutBroadcastFails(t *testing.T) {
 		t.Fatal("expected error when target mac missing on non-broadcast interface")
 	}
 }
+
+func TestPacketForEgress_CrossLinkType_EthernetToRawVariants(t *testing.T) {
+	tests := []struct {
+		name       string
+		egressType layers.LinkType
+		targetIP   net.IP
+	}{
+		{name: "RawOpenBSD", egressType: proxy.LinkTypeRawOpenBSD, targetIP: net.IP{10, 0, 1, 63}},
+		{name: "RawOthers", egressType: proxy.LinkTypeRawOthers, targetIP: net.IP{10, 0, 1, 64}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			pkt := buildUDPPacketForLinkType(
+				t,
+				layers.LinkTypeEthernet,
+				net.IP{10, 0, 0, 1},
+				net.IP{10, 0, 0, 2},
+				net.HardwareAddr{0, 1, 2, 3, 4, 5},
+				net.HardwareAddr{6, 7, 8, 9, 10, 11},
+				[]byte("hello"),
+				"eth-in",
+			)
+
+			out, err := PacketForEgress(pkt, Options{
+				TargetIP:       tc.targetIP,
+				EgressLinkType: tc.egressType,
+			})
+			if err != nil {
+				t.Fatalf("PacketForEgress failed: %v", err)
+			}
+
+			if out.Packet.Layer(layers.LayerTypeEthernet) != nil {
+				t.Fatalf("did not expect ethernet layer on %s egress", tc.name)
+			}
+			if out.Packet.Layer(layers.LayerTypeLoopback) != nil {
+				t.Fatalf("did not expect loopback layer on %s egress", tc.name)
+			}
+			ipLayer := out.Packet.Layer(layers.LayerTypeIPv4)
+			if ipLayer == nil {
+				t.Fatalf("expected IPv4 layer on %s egress", tc.name)
+			}
+			if !ipLayer.(*layers.IPv4).DstIP.Equal(tc.targetIP) {
+				t.Fatalf("unexpected dst ip: %s", ipLayer.(*layers.IPv4).DstIP)
+			}
+		})
+	}
+}

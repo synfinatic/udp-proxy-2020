@@ -3,6 +3,7 @@ package proxy
 import (
 	"fmt"
 	"log/slog"
+	"runtime"
 	"sync"
 	"time"
 
@@ -125,6 +126,12 @@ func (dm *DeviceManager) isValidLinkType(lt layers.LinkType) bool {
 	switch lt {
 	case layers.LinkTypeLoop, layers.LinkTypeEthernet, layers.LinkTypeNull, layers.LinkTypeRaw:
 		return true
+	case LinkTypeRawOpenBSD:
+		// OpenBSD uses different DLT for raw sockets
+		return runtime.GOOS == "openbsd"
+	case LinkTypeRawOthers:
+		// Most other OSes that don't use the LinkTypeRaw, use this DLT for raw sockets
+		return runtime.GOOS != "openbsd"
 	}
 	return false
 }
