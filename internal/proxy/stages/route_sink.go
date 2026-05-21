@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net"
 
+	"github.com/gopacket/gopacket/layers"
 	"github.com/synfinatic/udp-proxy-2020/internal/proxy"
 	proxyrewrite "github.com/synfinatic/udp-proxy-2020/internal/proxy/rewrite"
 )
@@ -18,7 +19,7 @@ type RouteSink struct {
 	BroadcastAddress net.IP
 	HardwareAddr     net.HardwareAddr
 	Registry         *RegistryProcessor
-	LinkType         proxy.PacketWriter
+	LinkType         layers.LinkType
 	Processors       []proxy.Processor
 	Sinks            []proxy.Sink
 }
@@ -58,7 +59,7 @@ func (s *RouteSink) writeToTarget(pkt *proxy.Packet, target routeTarget) {
 		TargetIP:               target.IP,
 		TargetMAC:              target.MAC,
 		SourceMAC:              s.HardwareAddr,
-		EgressLinkType:         s.LinkType.LinkType(),
+		EgressLinkType:         s.LinkType,
 		AllowBroadcastDstMAC:   target.AllowBroadcastMAC,
 		ForceBroadcastDestMAC:  target.BroadcastDestMAC,
 		OutputArrivalInterface: s.Iname,

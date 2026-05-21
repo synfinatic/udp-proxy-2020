@@ -25,6 +25,7 @@ var Tag = "NO-TAG"
 var CommitID = "unknown"
 var Delta = ""
 var newRegistryProcessorByInterface = stages.NewRegistryProcessorByInterface
+var newTransmitterSink = stages.NewTransmitterSink
 
 func main() {
 	cli := parseArgs()
@@ -283,7 +284,7 @@ func discoverBroadcastAddress(dm *proxy.DeviceManager, netif *net.Interface, add
 
 // setupCrossInterfaceSink attaches a cross-interface sink between two ifaceStates.
 func setupCrossInterfaceSink(cli CLI, dm *proxy.DeviceManager, registry *stages.RegistryProcessor, src, dst ifaceState) error {
-	transmitter, err := stages.NewTransmitterSink(dm, dst.name)
+	transmitter, err := newTransmitterSink(dm, dst.name)
 	if err != nil {
 		slog.Error("Failed to create transmitter sink", "source_interface", src.name, "target_interface", dst.name, "error", err)
 		return fmt.Errorf("failed to create transmitter sink from %s to %s", src.name, dst.name)
@@ -295,7 +296,7 @@ func setupCrossInterfaceSink(cli CLI, dm *proxy.DeviceManager, registry *stages.
 		BroadcastAddress: dst.bcastIP,
 		HardwareAddr:     dst.netif.HardwareAddr,
 		Registry:         registry,
-		LinkType:         transmitter.Writer,
+		LinkType:         transmitter.Writer.LinkType(),
 	}
 
 	if cli.Decode {
@@ -303,7 +304,7 @@ func setupCrossInterfaceSink(cli CLI, dm *proxy.DeviceManager, registry *stages.
 	}
 
 	if cli.Pcap {
-		if err := addRoutePcapFileSink(route, cli.PcapPath, src.name, dst.name, transmitter.Writer.LinkType()); err != nil {
+		if err := addRoutePcapFileSink(route, cli.PcapPath, src.name, dst.name, route.LinkType); err != nil {
 			return err
 		}
 	}

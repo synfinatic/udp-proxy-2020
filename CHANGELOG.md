@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+Fixed:
+- No longer crash when vpn tunnels are restarted on the host #224
+- Added unit and some integration tests
+
+Changed:
+- Complete rewrite
+- New `--decode` flag for decoding packets being forwarded for debugging
+- `--pcap` flag now generates files for the input interface and each in->out combination
+
+
 ## v0.1.4 -- 2026-03-17
 
 Fixed:
