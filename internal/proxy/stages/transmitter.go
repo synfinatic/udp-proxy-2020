@@ -85,6 +85,10 @@ func (s *TransmitterSink) reconnectLoop() {
 	slog.Warn("waiting for interface to come back",
 		slog.String("interface", s.Iname))
 
+	if s.ctx == nil {
+		return
+	}
+
 	delay := reconnectInitialDelay
 	for {
 		select {
@@ -128,7 +132,9 @@ func (s *TransmitterSink) reconnectLoop() {
 
 // Close cancels any in-progress reconnect and closes the underlying PCAP handle.
 func (s *TransmitterSink) Close() error {
-	s.cancel()
+	if s.cancel != nil {
+		s.cancel()
+	}
 
 	s.mu.Lock()
 	staleWriter := s.Writer
