@@ -9,21 +9,27 @@ Vagrant.configure("2") do |config|
   SHELL
 
   # have to rsync our code over to build
-  config.vm.synced_folder ".", "/home/vagrant/udp-proxy-2020", create: true, disabled: false, id: 'source-code', type: "rsync"
+  config.vm.synced_folder ".", "/home/vagrant/udp-proxy-2020", create: true, disabled: false, id: 'source-code', type: "rsync",
+    rsync__exclude: [".git/", ".vagrant/", "dist/"]
   config.vm.provider :virtualbox do |vb|
     vb.name = "udp-proxy-2020-freebsd"
     vb.gui = false
     vb.customize ["modifyvm", :id, "--vram", "16", "--graphicscontroller", "vmsvga"]
-    vb.cpus = 2
-    vb.memory = 1024
+    vb.cpus = 4
+    vb.memory = 4098
   end
 
-  # build the code.  we scp it back onto the host via our Makefile
-  config.trigger.after :up do |trigger|
-    trigger.info = "building FreeBSD binaries..."
-    trigger.name = "build-binary"
-    trigger.run = {inline: "vagrant rsync"}
-    trigger.run_remote = {inline: "sh -c 'PATH=/usr/local/bin:${PATH} cd udp-proxy-2020 && gmake FREEBSD_ARCHES=\"arm64 amd64 armv7\" freebsd-binaries'"}
+  # build the code. we scp it back onto the host via our Makefile.
+  # `make freebsd` sets FREEBSD_SKIP_TRIGGER_BUILD=1 and runs gmake explicitly
+  # so users can see go build commands and output in their local terminal.
+  unless ENV["FREEBSD_SKIP_TRIGGER_BUILD"] == "1"
+    config.trigger.after :up do |trigger|
+      trigger.info = "building FreeBSD binaries..."
+      trigger.name = "build-binary"
+      trigger.run = {inline: "vagrant rsync"}
+      freebsd_arches = ENV.fetch("FREEBSD_ARCHES", "amd64 arm64")
+      trigger.run_remote = {inline: "sh -c 'PATH=/usr/local/bin:${PATH} cd udp-proxy-2020 && find cmd internal -type f -name \"*.go\" -exec touch {} + && (touch go.mod go.sum Makefile Vagrantfile 2>/dev/null || true) && gmake FREEBSD_ARCHES=\"#{freebsd_arches}\" freebsd-binaries'"}
+    end
   end
 end
 
