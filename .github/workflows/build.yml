@@ -227,7 +227,7 @@ jobs:
             path: dist/udp-proxy-2020*
 
   macos:
-    name: MacOS x86
+    name: MacOS ARM64
     runs-on: macos-latest
 
     steps:
@@ -275,8 +275,13 @@ jobs:
         - name: Checkout code
           uses: actions/checkout@v6
 
+
+        - name: Get project version
+          run: echo "PROJECT_VERSION=$(make .print-version)" >> $GITHUB_ENV
+
         - name: Get FreeBSD Archs
           run: echo "FREEBSD_ARCHES=$(make .print-freebsd-archs)" >> $GITHUB_ENV
+
 
         - name: Build in FreeBSD
           # https://github.com/marketplace/actions/freebsd-vm 
@@ -286,7 +291,7 @@ jobs:
             release: '${{ env.FREEBSD_VERSION }}'
             usesh: true
             prepare: |
-                pkg install -y wget bash git gmake go libpcap pkgconf pcre2 \
+                pkg install -y wget bash git gmake go libpcap pkgconf pcre2 m4 \
                   aarch64-binutils arm-gnueabi-binutils amd64-binutils \
                   aarch64-freebsd-sysroot amd64-freebsd-sysroot armv7-freebsd-sysroot 
             run: |
@@ -295,12 +300,53 @@ jobs:
                 git config --global --add safe.directory /home/runner/work/udp-proxy-2020/udp-proxy-2020
                 FREEBSD_VERSION=${{ env.FREEBSD_VERSION }} gmake FREEBSD_ARCHES="${{ env.FREEBSD_ARCHES }}" freebsd-binaries
 
+                # Build .pkg for each arch
+                PKG_VERSION="${{ env.PROJECT_VERSION }}"
+                FREEBSD_MAJOR=$(echo "${{ env.FREEBSD_VERSION }}" | cut -d. -f1)
+                for arch in ${{ env.FREEBSD_ARCHES }}; do
+                  case "$arch" in
+                    amd64) ABI="freebsd:${FREEBSD_MAJOR}:x86:64" ;;
+                    arm64) ABI="freebsd:${FREEBSD_MAJOR}:aarch64:*" ;;
+                    armv7) ABI="freebsd:${FREEBSD_MAJOR}:armv7:*" ;;
+                    *) echo "Unknown arch: $arch"; exit 1 ;;
+                  esac
+
+
+                  # Explicitly stage all files listed in the manifest
+                  mkdir -p stage_${arch}/usr/local/sbin
+                  mkdir -p stage_${arch}/usr/local/etc/rc.d
+                  mkdir -p stage_${arch}/etc/rc.conf.d
+
+                  cp dist/udp-proxy-2020-${PKG_VERSION}-freebsd-${arch} stage_${arch}/usr/local/sbin/udp-proxy-2020
+                  cp startup-scripts/freebsd/usr/local/etc/rc.d/udp-proxy-2020 stage_${arch}/usr/local/etc/rc.d/udp-proxy-2020
+                  cp startup-scripts/freebsd/usr/local/etc/udp-proxy-2020.conf.sample stage_${arch}/usr/local/etc/udp-proxy-2020.conf.sample
+                  cp startup-scripts/freebsd/etc/rc.conf.d/udp_proxy_2020 stage_${arch}/etc/rc.conf.d/udp_proxy_2020
+
+                  chmod 755 stage_${arch}/usr/local/sbin/udp-proxy-2020
+                  chmod 755 stage_${arch}/usr/local/etc/rc.d/udp-proxy-2020
+                  chmod 644 stage_${arch}/usr/local/etc/udp-proxy-2020.conf.sample
+                  chmod 644 stage_${arch}/etc/rc.conf.d/udp_proxy_2020
+
+                  # ls -lR stage_${arch}
+
+                  m4 -DM4_VERSION="${PKG_VERSION}" -DM4_ABI="${ABI}" startup-scripts/freebsd/pkg-manifest.ucl.m4 > manifest_${arch}.ucl
+
+                  mkdir -p pkg_out_${arch}
+                  pkg create -m manifest_${arch}.ucl -r stage_${arch} -o pkg_out_${arch}
+                  mv pkg_out_${arch}/udp-proxy-2020-*.pkg dist/udp-proxy-2020-${PKG_VERSION}-freebsd-${arch}.pkg
+                done
+                pkg add ./dist/udp-proxy-2020-${PKG_VERSION}-freebsd-amd64.pkg || exit 1
+
         - name: Verify FreeBSD artifacts
           run: |
             ls -l dist/udp-proxy-2020*-freebsd-* || true
             for arch in ${{ env.FREEBSD_ARCHES }}; do
               if ! ls dist/udp-proxy-2020*-freebsd-$arch >/dev/null 2>&1; then
-                echo "Missing FreeBSD $arch artifact"
+                echo "Missing FreeBSD $arch binary"
+                exit 1
+              fi
+              if ! ls dist/udp-proxy-2020*-freebsd-${arch}.pkg >/dev/null 2>&1; then
+                echo "Missing FreeBSD $arch .pkg"
                 exit 1
               fi
             done

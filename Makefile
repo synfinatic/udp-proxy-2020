@@ -435,3 +435,7 @@ package: .linux-amd64  ## Build deb/rpm packages
 .PHONY: .print-freebsd-archs
 .print-freebsd-archs:  ## Print the FreeBSD arches we are building for
 	@echo $(FREEBSD_ARCHES)
+
+.PHONY: .print-version
+.print-version:  ## Print the project version
+	@echo $(PROJECT_VERSION)
