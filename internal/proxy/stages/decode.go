@@ -123,12 +123,20 @@ func formatLinkSummary(packet gopacket.Packet) string {
 	if ipLayer := packet.Layer(layers.LayerTypeIPv4); ipLayer != nil {
 		if ipv4, ok := ipLayer.(*layers.IPv4); ok {
 			return fmt.Sprintf("ethertype IPv4, IPID: 0x%04x, length %d:", ipv4.Id, len(packet.Data()))
-		} else if ipv6, ok := packet.Layer(layers.LayerTypeIPv6).(*layers.IPv6); ok {
+		}
+	}
+
+	if ipLayer := packet.Layer(layers.LayerTypeIPv6); ipLayer != nil {
+		if ipv6, ok := ipLayer.(*layers.IPv6); ok {
 			return fmt.Sprintf("ethertype IPv6, FlowLabel: %d, length %d:", ipv6.FlowLabel, len(packet.Data()))
 		}
 	}
 
-	return fmt.Sprintf("ethertype (0x%04x), length %d:", uint16(eth.EthernetType), len(packet.Data()))
+	if eth != nil {
+		return fmt.Sprintf("ethertype (0x%04x), length %d:", uint16(eth.EthernetType), len(packet.Data()))
+	}
+
+	return fmt.Sprintf("unknown link, length %d:", len(packet.Data()))
 }
 
 func formatNetworkSummary(packet gopacket.Packet) string {

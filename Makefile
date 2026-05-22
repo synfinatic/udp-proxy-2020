@@ -285,8 +285,8 @@ $(FREEBSD_ARM64_S_NAME): $(wildcard */*.go)
 # on my ARM64 MAC vs. Ubuntu AMD64 image in Github... issue with -libverbs
 $(FREEBSD_ARMV7_S_NAME): $(wildcard */*.go)
 	GOOS=freebsd GOARCH=arm GOARM=7 CGO_ENABLED=1 \
-	CGO_LDFLAGS="$$(pkg-config --libs libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/arm7) -libverbs" \
-	CGO_CFLAGS="$$(pkg-config --cflags libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/arm7)" \
+	CGO_LDFLAGS="$$(pkg-config --libs libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/armv7) -libverbs" \
+	CGO_CFLAGS="$$(pkg-config --cflags libpcap --define-variable=prefix=/usr/local/freebsd-sysroot/armv7)" \
 	CC=/usr/local/freebsd-sysroot/armv7/bin/cc \
 	go build -ldflags '$(LDFLAGS) -linkmode external -extldflags -static' \
 		-o $(FREEBSD_ARMV7_S_NAME) ./cmd/udp-proxy-2020/...

@@ -37,67 +37,76 @@ package main
 
 import (
     "context"
+    "net"
     "time"
+
+    "github.com/synfinatic/udp-proxy-2020/internal/config"
     "github.com/synfinatic/udp-proxy-2020/internal/proxy"
     "github.com/synfinatic/udp-proxy-2020/internal/proxy/stages"
-    "github.com/synfinatic/udp-proxy-2020/internal/config"
 )
 
 func main() {
     ctx := context.Background()
     dm, _ := proxy.NewDeviceManager()
-    bus := proxy.NewPacketBus()
-    
+
     ports := []int32{9003}
     interfaces := []string{"eth0", "eth1", "vpn0"}
-    
-    // Map to hold fixed IPs per interface
-    fixedIPs := map[string][]string{
-        "vpn0": {"192.168.10.50"}, // Hard-coded host on vpn0
-    }
+    fixedIPs := map[string][]string{"vpn0": {"192.168.10.50"}}
+
+    registry, _ := stages.NewRegistryProcessorByInterface(180*time.Minute, fixedIPs)
+    pipelines := make(map[string]*proxy.Pipeline)
+    states := make(map[string]struct {
+        netif  *net.Interface
+        bcast  net.IP
+        source *stages.PcapSource
+    })
 
     for _, iname := range interfaces {
-        // 1. Create Handle
-        handle, _ := dm.CreateHandle(iname, true, 250 * time.Millisecond)
-        
-        // 2. Set BPF Filter for port 9003
+        netif, _ := net.InterfaceByName(iname)
+
+        // 1. Open source capture and set BPF
+        source, _ := stages.NewPcapSource(dm, iname, (netif.Flags&net.FlagBroadcast) == 0, 250*time.Millisecond)
+        handle := source.Handle()
         addrs, _ := dm.GetAddresses(iname)
         filter := config.BuildBPFFilter(ports, addrs)
         handle.SetBPFFilter(filter)
 
-        // 3. Initialize Registry (handles learning and fixed IPs)
-        registry, _ := stages.NewRegistryProcessor(180 * time.Minute, fixedIPs[iname])
-
-        // 4. Create Pipeline Source
-        pcapSource := stages.NewPcapSource(handle, iname)
-        pipeline := proxy.NewPipeline(pcapSource)
-
-        // 5. Add Processors
+        // 2. Build inbound pipeline
+        pipeline := proxy.NewPipeline(source)
         pipeline.AddProcessor(&stages.FilterProcessor{Iname: iname})
-        pipeline.AddProcessor(registry)
+        pipeline.AddProcessor(&stages.RegistryLearnerProcessor{Registry: registry, Iname: iname})
 
-        // 6. Add Forwarding Sink (Sends to other interfaces via Bus)
-        pipeline.AddSink(&stages.ForwardingSink{
-            Feed:     bus,
-            Iname:    iname,
-            LinkType: handle.LinkType(),
-        })
+        pipelines[iname] = pipeline
+        states[iname] = struct {
+            netif  *net.Interface
+            bcast  net.IP
+            source *stages.PcapSource
+        }{netif: netif, bcast: addrs[0].Broadaddr, source: source}
+    }
 
-        // 7. Subscribe to the Bus for outgoing packets
-        busChan := make(chan proxy.BusMessage, 100)
-        bus.Subscribe(iname, busChan)
+    // 3. Wire cross-interface RouteSink -> TransmitterSink fanout
+    for srcName, srcPipeline := range pipelines {
+        for dstName, dst := range states {
+            if srcName == dstName {
+                continue
+            }
 
-        // 8. Start Transmitter (Physical output)
-        transmitter := &stages.TransmitterSink{
-            Handle:       handle,
-            Iname:        iname,
-            PacketBus:    busChan,
-            Registry:     registry, // Uses registry to find where to send
-            // ... hardware addr and broadcast IP discovery omitted for brevity
+            tx, _ := stages.NewTransmitterSink(dm, dstName)
+            route := &stages.RouteSink{
+                Iname:            dstName,
+                Broadcast:        (dst.netif.Flags & net.FlagBroadcast) != 0,
+                BroadcastAddress: dst.bcast,
+                HardwareAddr:     dst.netif.HardwareAddr,
+                Registry:         registry,
+                LinkType:         tx.Writer.LinkType(),
+                Sinks:            []proxy.Sink{tx},
+            }
+            srcPipeline.AddSink(route)
         }
-        go transmitter.Run()
+    }
 
-        // 9. Run the pipeline logic
+    // 4. Run inbound pipelines
+    for _, pipeline := range pipelines {
         go pipeline.Run(ctx)
     }
 
@@ -110,11 +119,11 @@ func main() {
 1. A packet arrives on `eth0:9003`.
 2. The `eth0` Pipeline captures it via `PcapSource`.
 3. The `RegistryProcessor` on `eth0` learns the sender's IP.
-4. The `ForwardingSink` publishes the packet to the `PacketBus`.
-5. The `PacketBus` sends the packet to the subscription channels for `eth1` and `vpn0`.
-6. The `TransmitterSink` for `vpn0` receives the message. It checks its `RegistryProcessor`.
-7. The `vpn0` Registry finds the fixed IP `192.168.10.50`.
-8. The `TransmitterSink` builds a new UDP packet and sends it out of `vpn0` to `192.168.10.50`.
+4. The source pipeline's `RouteSink(vpn0)` chooses one or more destination targets using the shared `RegistryProcessor`.
+5. For each target, `RouteSink` rewrites the packet for `vpn0` egress and forwards it to downstream sinks.
+6. The `TransmitterSink(vpn0)` writes the rewritten packet to the `vpn0` interface.
+7. If no learned clients exist on `vpn0`, broadcast fallback can still deliver the packet (when enabled).
+8. Fixed entries such as `vpn0@192.168.10.50` are always considered valid route targets.
 
 ---
 

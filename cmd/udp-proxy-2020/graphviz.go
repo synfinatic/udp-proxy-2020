@@ -205,15 +205,8 @@ func addCrossPipelineEdges(buf *strings.Builder, pipelines []*proxy.Pipeline) {
 	// Map interface names to pipeline indices
 	ifaceToIndex := make(map[string]int)
 	for i, pipeline := range pipelines {
-		sourceName := pipeline.Source.Name()
-		// Extract interface name from source (e.g., "PcapSource(eth0)" -> "eth0")
-		if strings.Contains(sourceName, "(") && strings.Contains(sourceName, ")") {
-			start := strings.Index(sourceName, "(") + 1
-			end := strings.Index(sourceName, ")")
-			if start > 0 && end > start {
-				iface := sourceName[start:end]
-				ifaceToIndex[iface] = i
-			}
+		if iface, ok := sourceInterfaceName(pipeline.Source.Name()); ok {
+			ifaceToIndex[iface] = i
 		}
 	}
 
@@ -238,4 +231,25 @@ func addCrossPipelineEdges(buf *strings.Builder, pipelines []*proxy.Pipeline) {
 			}
 		}
 	}
+}
+
+func sourceInterfaceName(sourceName string) (string, bool) {
+	// Current PcapSource.Name() returns "PcapSource:<iface>".
+	if strings.Contains(sourceName, ":") {
+		parts := strings.SplitN(sourceName, ":", 2)
+		if len(parts) == 2 && parts[1] != "" {
+			return parts[1], true
+		}
+	}
+
+	// Backwards-compatible fallback for "PcapSource(<iface>)".
+	if strings.Contains(sourceName, "(") && strings.Contains(sourceName, ")") {
+		start := strings.Index(sourceName, "(") + 1
+		end := strings.Index(sourceName, ")")
+		if start > 0 && end > start {
+			return sourceName[start:end], true
+		}
+	}
+
+	return "", false
 }
