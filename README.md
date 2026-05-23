@@ -48,10 +48,9 @@ supports Linux for reading & writing to (ethernet?) network interfaces.
 ## Installation & Startup Scripts
 
 Pretty much any Unix-like system is supported because the dependcy list is only
-`libpcap` and `golang`.  I develop on MacOS and specifically target
-[pfSense](https://www.pfsense.org)/FreeBSD and
-[Ubiquiti](https://www.ui.com) USG, EdgeRouter and DreamMachine/Pro as those
-are quite common among the Roon user community.
+`libpcap` and `golang`.  I develop on MacOS and specifically target FreeBSD
+(with a focus on OpnSense), [Ubiquiti](https://www.ui.com) USG, EdgeRouter and
+DreamMachine/Pro as those are quite common among the Roon user community.
 
 ### Packages
 
@@ -59,6 +58,8 @@ If you are using a Linux RedHat or Debian based distro, the easiest way to insta
 is grab the appropriate `.rpm` or `.deb` file and install it with your package
 manager.  Then edit `/etc/udp-proxy-2020.conf` and start via:
 `systemctl start udp-proxy-2020`.
+
+FreeBSD packages are also available for amd64 and arm64.
 
 ### Docker
 <!-- markdown-link-check-disable -->
@@ -73,7 +74,7 @@ https://docs.docker.com/network/host/).
 ### Manual
 
 I [release binaries](https://github.com/synfinatic/udp-proxy-2020/releases)
-for Linux, FreeBSD (pfSense) and MacOS for Intel, ARM and MIPS hardware.
+for Linux, FreeBSD, and MacOS for Intel, ARM and MIPS hardware.
 
 There are now instructions and startup scripts available in the [startup-scripts](
 startup-scripts) directory.  If you figure out how to add support for another
@@ -130,9 +131,9 @@ I have tested both "road warrior" VPN configs with Roon client running on my lap
 and connecting back to my home firewall via OpenVPN and Wireguard.  I personally
 use Wireguard instead of OpenVPN because it is more secure and has better performance.
 
-I've also tested Site-to-Site VPN using Wireguard + pfSense.  I followed the 
+I've also tested Site-to-Site VPN using Wireguard + pfSense.  I followed the
 [pfSense site-to-site Wireguard VPN directions](
-https://docs.netgate.com/pfsense/en/latest/recipes/wireguard-s2s.html) and 
+https://docs.netgate.com/pfsense/en/latest/recipes/wireguard-s2s.html) and
 installed `udp-proxy-2020` on _both_ firewalls.  You must configure the
 `--interface` option to include both the LAN and Wireguard network interfaces.
 
@@ -206,7 +207,7 @@ forums wrote up
 
 udp-proxy-2020 is built for multiple OS and hardware platforms:
 
-* MacOS/Intel x86_64: `darwin-amd64`
+* MacOS/ARM64 `darwin-arm64`
 * Linux/Intel x86_64: `linux-amd64`
 * Linux/ARM64: `linux-arm64` (RasPi 2 V1.2 and above, Ubiquiti UniFi Dream Machine)
 * Linux/ARMv7 (~~hardware~~software floating point): `linux-armv7` (RasPi 2 V1.1 and below)

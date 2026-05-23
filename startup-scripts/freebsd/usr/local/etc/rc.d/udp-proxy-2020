@@ -1,0 +1,56 @@
+#!/bin/sh
+#
+# PROVIDE: udp_proxy_2020
+# REQUIRE: DAEMON NETWORKING
+# KEYWORD: shutdown
+#
+# Add to /etc/rc.conf or /etc/rc.conf.local:
+#   udp_proxy_2020_enable="YES"
+#   udp_proxy_2020_flags="--port 9003 --interface em0 --interface wg0"
+
+. /etc/rc.subr
+
+desc="UDP Proxy 2020 broadcast/relay daemon"
+name=udp_proxy_2020
+rcvar=udp_proxy_2020_enable
+command="/usr/local/sbin/udp-proxy-2020"
+procname="${command##*/}"
+pidfile="/var/run/${name}.pid"
+
+load_rc_config ${name}
+
+# Defaults
+: ${udp_proxy_2020_enable:="NO"}
+: ${udp_proxy_2020_conf="/usr/local/etc/udp-proxy-2020.conf"}
+
+required_files="${udp_proxy_2020_conf}"
+
+start_cmd="${name}_start"
+stop_cmd="${name}_stop"
+status_cmd="${name}_status"
+
+. ${udp_proxy_2020_conf}
+
+udp_proxy_2020_start() {
+    /usr/sbin/daemon -P "${pidfile}" -r ${command} ${udp_vars}
+}
+
+udp_proxy_2020_stop() {
+    if [ -f "${pidfile}" ]; then
+        kill "$(cat ${pidfile})" 2>/dev/null && rm -f "${pidfile}"
+    else
+        echo "${name} not running (missing pidfile)"
+    fi
+}
+
+udp_proxy_2020_status() {
+    if [ ! -f "${pidfile}" ]; then
+        echo "${name} is not running."
+    elif kill -0 "$(cat ${pidfile})" 2>/dev/null; then
+        echo "${name} is running (pid $(cat ${pidfile}))"
+    else
+        echo "${name} is not running but left stale pidfile."
+    fi
+}
+
+run_rc_command "$1"
