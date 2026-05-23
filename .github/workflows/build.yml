@@ -228,7 +228,7 @@ jobs:
 
   macos:
     name: MacOS ARM64
-    runs-on: macos-latest
+    runs-on: macos-15 # macos-latest is currently broken?
 
     steps:
         - name: Checkout code
@@ -242,18 +242,18 @@ jobs:
         - name: Install dependencies
           run: |
             brew update
-            brew install make
+            brew install make libpcap
 
-        - name: Build Libpcap from source
-          run: |
-            export BASEDIR=$(pwd)
-            export LIBPCAP_VERSION=${{ env.LIBPCAP_VERSION }}
-            wget -qO - https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz | tar zxf -
-
-            cd ${BASEDIR}/libpcap-${LIBPCAP_VERSION}
-            ./configure --disable-dbus
-            make
-            sudo make install
+#        - name: Build Libpcap from source
+#          run: |
+#            export BASEDIR=$(pwd)
+#            export LIBPCAP_VERSION=${{ env.LIBPCAP_VERSION }}
+#            wget -qO - https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz | tar zxf -
+#
+#            cd ${BASEDIR}/libpcap-${LIBPCAP_VERSION}
+#            ./configure --disable-dbus
+#            make
+#            sudo make install
 
         - name: Build Binary
           run: |
