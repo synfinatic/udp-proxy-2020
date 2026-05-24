@@ -42,7 +42,7 @@ Python/Ruby and a bunch of libraries.
 
 _Also: HAHAHAHAHAHAHA!  None of that is true!_  Needing to use
 [libpcap](https://www.tcpdump.org) means I have to cross compile using CGO because
-[gopacket/pcapgo](https://pkg.go.dev/github.com/google/gopacket@master/pcapgo) only
+[gopacket/pcapgo](https://pkg.go.dev/github.com/gopacket/gopacket@master/pcapgo) only
 supports Linux for reading & writing to (ethernet?) network interfaces.
 
 ## Installation & Startup Scripts
@@ -161,8 +161,8 @@ socket on the specified `--port`(s).  This prevents the underlying OS from issui
 ICMP Port Unreachable messages which can break certain clients (noteably the
 [Roon](https://roonlabs.com) iOS client).
 
-The only time you should need to use the `--no-listen` flag is if there is another
-piece of software that is running on the same host as `udp-proxy-2020`.
+The only time you should need to use the `--no-listen` flag if `udp-proxy-2020`
+is running on the same host as Roon.
 
 ### Does udp-proxy-2020 support running on the same host as Roon/etc?
 
@@ -175,12 +175,19 @@ These flags are for debugging problems with `udp-proxy-2020`.  You should
 use these flags when I direct you to do so as part of a [ticket](
 https://github.com/synfinatic/udp-proxy-2020/issues) you have opened for `udp-proxy-2020`.
 
-If you need to inspect live packets without opening a capture file, use
-`--decode` to print a one-line decode of each forwarded packet to stdout.
+Host, most of the time, you can use `--decode` to print a one-line
+decode of each forwarded packet to stdout.
 
 ### Where can I download precompiled binaries?
 
 From the [releases page](https://github.com/synfinatic/udp-proxy-2020/releases) on Github.
+
+### My OS says the precompiled binares are "untrusted" and may be dangerous
+
+This is because I don't pay Apple a yearly fee in order to sign my binaries. This
+[web page](https://donatstudios.com/mac-terminal-run-unsigned-binaries) provides the best
+info I've found on telling Apple you trust me enough to run the binary.  Of course, if
+you don't trust me, that's cool... you can always build from source!
 
 ### So is it a "proxy"?  Are there any proxy config settings I need to configure in my app?
 
