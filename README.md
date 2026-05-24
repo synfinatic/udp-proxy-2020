@@ -34,7 +34,7 @@ it "sees" so it can then sends them via libpcap/packet injection out all the oth
 configured interfaces.  If this makes you go "ew", well,
 [welcome to 2020](https://google.com/search?q=why+is+2020+the+worst).
 
-### The good news...
+### The good news
 
 I'm writing this in GoLang so at least cross compiling onto your random Linux/FreeBSD
 router/firewall is reasonably easy.  No ugly cross-compling C or trying to install
@@ -85,7 +85,7 @@ platform, please send me a pull request!
 ## Configuration
 
 Run `udp-proxy-2020 --help` for a current list of command line options.  
-Also, please note on many operating systems you will need to run it as the 
+Also, please note on many operating systems you will need to run it as the
 `root` user.  Linux systems can optionally grant the `CAP_NET_RAW` capability.
 
 Currently there are only a few flags you probaly need to worry about:
@@ -97,7 +97,7 @@ Currently there are only a few flags you probaly need to worry about:
 Advanced options:
 
 * `--fixed-ip` -- Hardcode an `<interface>@<ipaddr>` to always send traffic to.
-   Useful for things like OpenVPN in site-to-site mode.
+   Useful for things like VPN's in site-to-site mode to force traffic over the tunnel.
 * `--timeout` -- Number of ms for pcap timeout value. (default is 250ms)
 * `--cache-ttl` -- Number of minutes to cache IPs for. (default is 180min / 3hrs)
    This value may need to be increased if you have problems passing traffic to
@@ -105,25 +105,33 @@ Advanced options:
    don't have a fixed ip.
 * `--no-listen` -- Do not listen on the specified UDP port(s) to avoid conflicts
 * `--deliver-local` -- Deliver packets locally on loopback interface
+* `--decode` -- Print a decode of packets sent/recieved
+
+There are other flags of course, run `./udp-proxy-2020 --help` for a full list.
+
+Other flags:
+
+* `--logfile` -- Write logs to the specified filename (default: `stderr`).
+* `--log-lines` -- Include source file/line numbers in log output.
+* `--list-interfaces` -- Print available interfaces and exit.
+* `--version` -- Print version/build information and exit.
 * `--graph-pipeline` -- Generate a Graphviz dot file at the specified path containing a visualization
    of the pipeline architecture. When used, requires `--interface` (2 or more) and `--port` to be specified,
    and will exit after generating the file. Use with `dot -Tpng out.dot -o out.png` to create a PNG image.
 
-There are other flags of course, run `./udp-proxy-2020 --help` for a full list.
-
 Example:
 
 ```sh
-udp-proxy-2020 --port 9003 --interface eth0,eth0.100,eth1,tun0 --cache-ttl 300
+udp-proxy-2020 --port 9003 --interface eth0,eth0.100,eth1,wg0 --cache-ttl 300
 ```
 
-Would forward udp/9003 packets on four interfaces: eth0, eth1, VLAN100 on eth0 and tun0.
-Client IP's on tun0 would be remembered for 5 minutes once they are learned.
+Would forward udp/9003 packets on four interfaces: eth0, eth1, VLAN100 on eth0 and wg0.
+Client IP's would be remembered for 5 minutes once they are learned on each interface.
 
 Note: "learning" requires the client to send a udp/9003 message first!  If
-your application requires a message to be sent *to* the client first, then you
-would need to specify `--fixed-ip=1.2.3.4@tun0` where `1.2.3.4` is the IP address
-of the client on tun0.
+your application requires a message to be sent _to_ the client first, then you
+would need to specify `--fixed-ip=wg0@1.2.3.4` where `1.2.3.4` is the IP address
+of the client on wg0.
 
 ## Using udp-proxy-2020 with VPNs
 
@@ -148,9 +156,9 @@ appropriate (we need GNU Make, not BSD Make).
 
 ### When should I use --no-listen?
 
-Starting with v0.0.11, `udp-proxy-2020` now by default creates a UDP listening 
+Starting with v0.0.11, `udp-proxy-2020` now by default creates a UDP listening
 socket on the specified `--port`(s).  This prevents the underlying OS from issuing
-ICMP Port Unreachable messages which can break certain clients (noteably the 
+ICMP Port Unreachable messages which can break certain clients (noteably the
 [Roon](https://roonlabs.com) iOS client).
 
 The only time you should need to use the `--no-listen` flag is if there is another
@@ -158,7 +166,7 @@ piece of software that is running on the same host as `udp-proxy-2020`.
 
 ### Does udp-proxy-2020 support running on the same host as Roon/etc?
 
-As of v0.1.0, yes.  You need to specify `--deliver-local` and `--no-listen` 
+As of v0.1.0, yes.  You need to specify `--deliver-local` and `--no-listen`
 options so that it delivers packets via the loopback interface.
 
 ### When should I use --pcap and --pcap-path?
