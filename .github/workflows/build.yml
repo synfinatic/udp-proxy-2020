@@ -375,7 +375,7 @@ jobs:
       - name: Download binaries linux-aarch64
         uses: actions/download-artifact@v8
         with:
-          name: build-files-linux-aarch64
+          name: build-files-linux-arm64
           path: dist/
 
       - name: Download binaries linux-amd64
@@ -393,7 +393,7 @@ jobs:
       - name: Download binaries macos
         uses: actions/download-artifact@v8
         with:
-          name: build-files-macos
+          name: build-files-darwin
           path: dist/
 
       - name: Download binaries freebsd
