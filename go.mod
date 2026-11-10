@@ -6,7 +6,7 @@ toolchain go1.26.3
 
 require (
 	github.com/alecthomas/kong v1.17.0
-	github.com/gopacket/gopacket v1.7.4
+	github.com/gopacket/gopacket v1.7.7
 	golang.org/x/net v0.55.0 // indirect; security
 )
 
